@@ -1,0 +1,13 @@
+com\ecommerce\order\dto\OrderItemRequest.class
+com\ecommerce\order\service\OrderService.class
+com\ecommerce\order\client\ProductResponse.class
+com\ecommerce\order\dto\ShippingAddressRequest.class
+com\ecommerce\order\dto\OrderRequest.class
+com\ecommerce\order\model\ShippingAddress.class
+com\ecommerce\order\client\ProductClient.class
+com\ecommerce\order\model\OrderItem.class
+com\ecommerce\order\OrderServiceApplication.class
+com\ecommerce\order\controller\OrderController.class
+com\ecommerce\order\model\OrderStatus.class
+com\ecommerce\order\model\Order.class
+com\ecommerce\order\repository\OrderRepository.class
