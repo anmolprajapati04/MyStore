@@ -1,343 +1,236 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import axios from 'axios'
+import { useCart } from '../context/CartContext'
+import { useToast } from '../components/Toast'
+import { useProducts } from '../hooks/useProducts'
+import { ProductCard } from '../components/ProductCard'
+import { SkeletonGrid } from '../components/SkeletonCard'
 
-const Products = () => {
-  const [products, setProducts] = useState([])
-  const [filteredProducts, setFilteredProducts] = useState([])
-  const [cart, setCart] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState('')
-  const [selectedCategory, setSelectedCategory] = useState('')
-  const [categories, setCategories] = useState([])
+const SORT_OPTIONS = [
+  { value: 'default',    label: 'Featured' },
+  { value: 'price-asc',  label: 'Price: Low → High' },
+  { value: 'price-desc', label: 'Price: High → Low' },
+  { value: 'name-asc',   label: 'Name: A → Z' },
+]
+
+export default function Products() {
   const { user } = useAuth()
+  const { addToCart, cartItems } = useCart()
+  const toast = useToast()
+  const location = useLocation()
+  const navigate = useNavigate()
 
-  // Function to get full image URL - FIXED with useCallback
-  const getImageUrl = useCallback((imagePath) => {
-    if (!imagePath) return '/api/placeholder/200/200';
-    
-    // If it's already a full URL, return as is
-    if (imagePath.startsWith('http')) return imagePath;
-    
-    // If it's a relative path, prepend the backend base URL
-    return imagePath;
-  }, [])
+  // Read URL params for search + category (set by Hero/Header)
+  const urlParams = new URLSearchParams(location.search)
+  const urlQuery    = urlParams.get('q') || ''
+  const urlCategory = urlParams.get('category') || ''
 
-  // Memoized fetch function to prevent infinite loops
-  const fetchProducts = useCallback(async () => {
-    try {
-      setLoading(true)
-      const response = await axios.get('/api/products')
-      console.log('Products API response:', response.data)
-      
-      // Process products to ensure image URLs are correct
-      const processedProducts = response.data.map(product => ({
-        ...product,
-        // Ensure imagePath is properly formatted
-        imagePath: getImageUrl(product.imagePath || product.imageUrl)
-      }))
-      
-      setProducts(processedProducts)
-      setFilteredProducts(processedProducts)
-      
-      // Extract unique categories
-      const uniqueCategories = [...new Set(processedProducts.map(product => product.category))]
-      setCategories(uniqueCategories)
-    } catch (error) {
-      console.error('Error fetching products:', error)
-    } finally {
-      setLoading(false)
-    }
-  }, [getImageUrl]) // Only depend on getImageUrl
+  const [searchTerm, setSearchTerm]         = useState(urlQuery)
+  const [selectedCategory, setSelectedCategory] = useState(urlCategory)
+  const [sort, setSort]                     = useState('default')
 
+  const { products, loading, error, refetch } = useProducts()
+
+  // Sync URL changes into state
   useEffect(() => {
-    console.log('Products component mounted, fetching products...')
-    fetchProducts()
-    
-    // Load cart from localStorage
-    const savedCart = localStorage.getItem('cart')
-    if (savedCart) {
-      setCart(JSON.parse(savedCart))
-    }
-  }, [fetchProducts]) // Only depend on fetchProducts
+    setSearchTerm(urlQuery)
+    setSelectedCategory(urlCategory)
+  }, [urlQuery, urlCategory])
 
-  useEffect(() => {
-    console.log('Filtering products...', products.length, searchTerm, selectedCategory)
-    // Filter products based on search and category
-    let filtered = products
-    
+  // Unique categories list
+  const categories = useMemo(
+    () => [...new Set(products.map(p => p.category).filter(Boolean))],
+    [products]
+  )
+
+  // Filter + sort — fully derived from state, no extra useEffect
+  const filtered = useMemo(() => {
+    let list = [...products]
+
     if (searchTerm) {
-      filtered = filtered.filter(product =>
-        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (product.description && product.description.toLowerCase().includes(searchTerm.toLowerCase()))
+      const q = searchTerm.toLowerCase()
+      list = list.filter(p =>
+        p.name?.toLowerCase().includes(q) ||
+        p.description?.toLowerCase().includes(q) ||
+        p.category?.toLowerCase().includes(q)
       )
     }
-    
+
     if (selectedCategory) {
-      filtered = filtered.filter(product => product.category === selectedCategory)
+      list = list.filter(p => p.category === selectedCategory)
     }
-    
-    setFilteredProducts(filtered)
-  }, [products, searchTerm, selectedCategory])
 
-  const addToCart = (product) => {
-    const existingItem = cart.find(item => item.id === product.id)
-    let newCart
-    
-    if (existingItem) {
-      newCart = cart.map(item =>
-        item.id === product.id
-          ? { ...item, quantity: item.quantity + 1 }
-          : item
-      )
-    } else {
-      newCart = [...cart, { ...product, quantity: 1 }]
+    switch (sort) {
+      case 'price-asc':  list.sort((a, b) => a.price - b.price);         break
+      case 'price-desc': list.sort((a, b) => b.price - a.price);         break
+      case 'name-asc':   list.sort((a, b) => a.name.localeCompare(b.name)); break
+      default: break
     }
-    
-    setCart(newCart)
-    localStorage.setItem('cart', JSON.stringify(newCart))
-    
-    // Show success message with better UX
-    alert(`${product.name} added to cart!`)
-    
-    // Dispatch event for cart updates
-    const event = new CustomEvent('cartUpdated', { detail: newCart })
-    window.dispatchEvent(event)
-  }
 
-  const getCartQuantity = (productId) => {
-    const item = cart.find(item => item.id === productId)
+    return list
+  }, [products, searchTerm, selectedCategory, sort])
+
+  const getCartQty = (id) => {
+    const item = cartItems.find(i => i.id === id)
     return item ? item.quantity : 0
   }
 
-  const getStockStatus = (quantity) => {
-    if (quantity === 0) return { text: 'Out of Stock', class: 'badge-danger' }
-    if (quantity < 10) return { text: 'Low Stock', class: 'badge-warning' }
-    return { text: 'In Stock', class: 'badge-success' }
+  const handleAddToCart = (product) => {
+    addToCart(product)
+    toast.success(`${product.name} added to cart! 🛒`)
   }
 
   const clearFilters = () => {
     setSearchTerm('')
     setSelectedCategory('')
+    setSort('default')
+    navigate('/products')
   }
 
-  if (loading) {
-    return (
-      <div className="container">
-        <div style={{ textAlign: 'center', padding: '4rem 0' }}>
-          <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🔄</div>
-          <h2>Loading Products...</h2>
-          <p style={{ color: 'var(--text-secondary)' }}>Discovering amazing products for you</p>
-        </div>
-      </div>
-    )
-  }
+  const hasActiveFilters = searchTerm || selectedCategory || sort !== 'default'
 
+  // ── Render ──────────────────────────────────────────────────────
   return (
-    <div className="container">
-      {/* Debug Info - Remove after fixing */}
-      <div style={{ 
-        background: 'rgba(59, 130, 246, 0.1)', 
-        padding: '1rem', 
-        marginBottom: '1rem', 
-        borderRadius: '8px',
-        border: '1px solid #3b82f6',
-        fontSize: '0.875rem'
-      }}>
-        <strong>Debug:</strong> Products: {products.length} | Loading: {loading.toString()} | Search: "{searchTerm}" | Category: "{selectedCategory}"
-      </div>
+    <div className="page-content">
+      <div className="container">
 
-      {/* Header Section */}
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center', 
-        margin: '2rem 0 1.5rem 0',
-        flexWrap: 'wrap',
-        gap: '1rem'
-      }}>
-        <div>
-          <h1 style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: '0.5rem' }}>
-            Our Products
-          </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '1.125rem' }}>
-            {filteredProducts.length} amazing products waiting for you
-          </p>
-        </div>
-        
-        {user && user.role === 'ROLE_ADMIN' && (
-          <button 
-            onClick={() => window.location.href = '/admin'}
-            className="btn btn-primary"
-          >
-            ⚙️ Manage Products
-          </button>
-        )}
-      </div>
-
-      {/* Filters Section */}
-      <div style={{ 
-        background: 'var(--surface)', 
-        padding: '1.5rem', 
-        borderRadius: 'var(--radius)',
-        marginBottom: '2rem',
-        boxShadow: 'var(--shadow)',
-        border: '1px solid var(--border)'
-      }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '1rem', alignItems: 'end' }}>
+        {/* Page header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
-            <label className="form-label">Search Products</label>
+            <h1 style={{ fontSize: 'clamp(1.5rem, 3vw, 2.25rem)', fontWeight: 900, letterSpacing: '-0.5px', marginBottom: '0.25rem' }}>
+              Our Products
+            </h1>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+              {loading ? 'Loading…' : `${filtered.length} product${filtered.length !== 1 ? 's' : ''} found`}
+            </p>
+          </div>
+          {user?.role === 'ROLE_ADMIN' && (
+            <a href="/admin" className="btn btn-outline btn-sm">⚙️ Manage Products</a>
+          )}
+        </div>
+
+        {/* Search + sort bar */}
+        <div className="filters-panel">
+          <div className="filter-group" style={{ flex: '2', minWidth: '240px' }}>
+            <label>Search</label>
             <input
               type="text"
               className="form-control"
-              placeholder="Search by name or description..."
+              placeholder="Search products…"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{ background: 'var(--background)' }}
+              onChange={e => setSearchTerm(e.target.value)}
             />
           </div>
-          
-          <div>
-            <label className="form-label">Filter by Category</label>
+          <div className="filter-group">
+            <label>Sort By</label>
             <select
               className="form-control"
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              style={{ background: 'var(--background)', minWidth: '150px' }}
+              value={sort}
+              onChange={e => setSort(e.target.value)}
             >
-              <option value="">All Categories</option>
-              {categories.map(category => (
-                <option key={category} value={category}>{category}</option>
+              {SORT_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </select>
           </div>
-        </div>
-        
-        {/* Active Filters */}
-        {(searchTerm || selectedCategory) && (
-          <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Active filters:</span>
-            {searchTerm && (
-              <span className="badge badge-primary" style={{ background: 'rgba(37, 99, 235, 0.1)', color: 'var(--primary)' }}>
-                Search: "{searchTerm}"
-                <button 
-                  onClick={() => setSearchTerm('')}
-                  style={{ marginLeft: '0.5rem', background: 'none', border: 'none', cursor: 'pointer' }}
-                >
-                  ×
-                </button>
-              </span>
-            )}
-            {selectedCategory && (
-              <span className="badge badge-primary" style={{ background: 'rgba(37, 99, 235, 0.1)', color: 'var(--primary)' }}>
-                Category: {selectedCategory}
-                <button 
-                  onClick={() => setSelectedCategory('')}
-                  style={{ marginLeft: '0.5rem', background: 'none', border: 'none', cursor: 'pointer' }}
-                >
-                  ×
-                </button>
-              </span>
-            )}
-            <button 
-              onClick={clearFilters}
-              className="btn btn-outline"
-              style={{ padding: '0.25rem 0.75rem', fontSize: '0.75rem' }}
-            >
-              Clear All
-            </button>
-          </div>
-        )}
-      </div>
-      
-      {/* Products Grid */}
-      {filteredProducts.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '4rem 0' }}>
-          <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>🔍</div>
-          <h2>No Products Found</h2>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>
-            {products.length === 0 ? 'No products available.' : 'Try adjusting your search or filter criteria'}
-          </p>
-          {products.length > 0 && (
-            <button 
-              onClick={clearFilters}
-              className="btn btn-primary"
-            >
-              Clear Filters
+          {hasActiveFilters && (
+            <button className="btn btn-ghost btn-sm" onClick={clearFilters} style={{ alignSelf: 'flex-end' }}>
+              ✕ Clear
             </button>
           )}
         </div>
-      ) : (
-        <div className="products-grid">
-          {filteredProducts.map(product => {
-            const stockStatus = getStockStatus(product.stockQuantity)
-            const cartQuantity = getCartQuantity(product.id)
-            const imageUrl = getImageUrl(product.imagePath || product.imageUrl)
-            
-            return (
-              <div key={product.id} className="product-card">
-                <div style={{ position: 'relative' }}>
-                  <img 
-                    src={imageUrl}
-                    alt={product.name}
-                    className="product-image"
-                    onError={(e) => {
-                      console.warn(`Image failed to load: ${imageUrl}, using fallback`)
-                      e.target.src = '/api/placeholder/200/200'
-                    }}
-                    onLoad={() => console.log(`Image loaded: ${imageUrl}`)}
-                  />
-                  <span className={`badge ${stockStatus.class}`} style={{ position: 'absolute', top: '0.5rem', left: '0.5rem' }}>
-                    {stockStatus.text}
-                  </span>
-                  {cartQuantity > 0 && (
-                    <span className="badge" style={{ 
-                      position: 'absolute', 
-                      top: '0.5rem', 
-                      right: '0.5rem',
-                      background: 'var(--accent)',
-                      color: 'white'
-                    }}>
-                      In Cart: {cartQuantity}
-                    </span>
-                  )}
-                </div>
-                
-                <div className="product-meta">
-                  <span className="product-category">{product.category}</span>
-                </div>
-                
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.5rem', lineHeight: '1.3' }}>
-                  {product.name}
-                </h3>
-                
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', marginBottom: '1rem', lineHeight: '1.5' }}>
-                  {product.description}
-                </p>
-                
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                  <div className="product-price">${product.price}</div>
-                  <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                    {product.stockQuantity} available
-                  </div>
-                </div>
-                
-                <button 
-                  onClick={() => addToCart(product)}
-                  className="btn btn-primary"
-                  style={{ width: '100%' }}
-                  disabled={product.stockQuantity === 0}
-                >
-                  {product.stockQuantity === 0 ? 'Out of Stock' : 
-                   cartQuantity > 0 ? `Add to Cart (${cartQuantity})` : 'Add to Cart'}
-                </button>
-              </div>
-            )
-          })}
-        </div>
-      )}
+
+        {/* Category pills */}
+        {categories.length > 0 && (
+          <div className="category-pills">
+            <button
+              className={`category-pill${!selectedCategory ? ' active' : ''}`}
+              onClick={() => setSelectedCategory('')}
+            >
+              All
+            </button>
+            {categories.map(cat => (
+              <button
+                key={cat}
+                className={`category-pill${selectedCategory === cat ? ' active' : ''}`}
+                onClick={() => setSelectedCategory(selectedCategory === cat ? '' : cat)}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Active filter tags */}
+        {hasActiveFilters && (
+          <div className="active-filters">
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Active:</span>
+            {searchTerm && (
+              <span className="filter-tag">
+                Search: "{searchTerm}"
+                <button onClick={() => setSearchTerm('')}>×</button>
+              </span>
+            )}
+            {selectedCategory && (
+              <span className="filter-tag">
+                {selectedCategory}
+                <button onClick={() => setSelectedCategory('')}>×</button>
+              </span>
+            )}
+            {sort !== 'default' && (
+              <span className="filter-tag">
+                {SORT_OPTIONS.find(o => o.value === sort)?.label}
+                <button onClick={() => setSort('default')}>×</button>
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Error state */}
+        {error && !loading && (
+          <div className="empty-state">
+            <div className="empty-state__icon">⚠️</div>
+            <h2>Failed to Load Products</h2>
+            <p>{error}</p>
+            <button className="btn btn-primary" onClick={refetch}>Try Again</button>
+          </div>
+        )}
+
+        {/* Skeleton loader */}
+        {loading && <SkeletonGrid count={8} />}
+
+        {/* Empty state */}
+        {!loading && !error && filtered.length === 0 && (
+          <div className="empty-state">
+            <div className="empty-state__icon">🔍</div>
+            <h2>{products.length === 0 ? 'No Products Yet' : 'No Results Found'}</h2>
+            <p>
+              {products.length === 0
+                ? 'Products will appear here once they are added.'
+                : 'Try adjusting your search or clearing your filters.'}
+            </p>
+            {products.length > 0 && (
+              <button className="btn btn-primary" onClick={clearFilters}>Clear Filters</button>
+            )}
+          </div>
+        )}
+
+        {/* Products grid */}
+        {!loading && !error && filtered.length > 0 && (
+          <div className="products-grid">
+            {filtered.map(product => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                onAddToCart={handleAddToCart}
+                cartQuantity={getCartQty(product.id)}
+              />
+            ))}
+          </div>
+        )}
+
+      </div>
     </div>
   )
 }
-
-export default Products

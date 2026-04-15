@@ -1,159 +1,149 @@
-import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import React from 'react'
+import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import axios from 'axios'
+import { useCart } from '../context/CartContext'
+import { useToast } from '../components/Toast'
+import { handleImageError, FALLBACK_IMAGE_URI } from '../utils/imageUtils'
 
-const Cart = () => {
-  const [cartItems, setCartItems] = useState([])
+export default function Cart() {
   const { user } = useAuth()
+  const { cartItems, removeFromCart, updateQuantity, cartTotal } = useCart()
+  const toast = useToast()
   const navigate = useNavigate()
 
-  useEffect(() => {
-    // Load cart from localStorage
-    const savedCart = localStorage.getItem('cart')
-    if (savedCart) {
-      setCartItems(JSON.parse(savedCart))
-    }
-  }, [])
+  const shipping = cartTotal > 0 ? 5.00 : 0
+  const total    = cartTotal + shipping
 
-  const updateCart = (items) => {
-    setCartItems(items)
-    localStorage.setItem('cart', JSON.stringify(items))
-  }
-
-  const removeFromCart = (productId) => {
-    const updatedCart = cartItems.filter(item => item.id !== productId)
-    updateCart(updatedCart)
-  }
-
-  const updateQuantity = (productId, newQuantity) => {
-    if (newQuantity < 1) return
-    
-    const updatedCart = cartItems.map(item =>
-      item.id === productId ? { ...item, quantity: newQuantity } : item
-    )
-    updateCart(updatedCart)
-  }
-
-  const getTotalPrice = () => {
-    return cartItems.reduce((total, item) => total + (item.price * item.quantity), 0)
+  const handleRemove = (item) => {
+    removeFromCart(item.id)
+    toast.info(`${item.name} removed from cart.`)
   }
 
   const proceedToCheckout = () => {
-    if (!user) {
-      navigate('/login')
-      return
-    }
+    if (!user) { navigate('/login'); return }
     navigate('/checkout')
   }
 
   if (cartItems.length === 0) {
     return (
-      <div className="container">
-        <div style={{ textAlign: 'center', padding: '4rem 0' }}>
-          <h2>Your Cart is Empty</h2>
-          <p>Add some products to your cart to see them here.</p>
-          <button 
-            onClick={() => navigate('/products')}
-            className="btn btn-primary"
-          >
-            Continue Shopping
-          </button>
+      <div className="page-content">
+        <div className="container">
+          <div className="empty-state">
+            <div className="empty-state__icon">🛒</div>
+            <h2>Your Cart is Empty</h2>
+            <p>Looks like you haven't added anything yet. Start browsing to fill it up!</p>
+            <Link to="/products" className="btn btn-primary btn-lg">Continue Shopping</Link>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="container">
-      <h1 style={{ margin: '2rem 0' }}>Shopping Cart</h1>
-      
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem' }}>
-        <div>
-          {cartItems.map(item => (
-            <div key={item.id} className="cart-item">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <img 
-                  src={item.imageUrl || '/api/placeholder/80/80'} 
+    <div className="page-content">
+      <div className="container">
+        <h1 style={{ fontSize: 'clamp(1.5rem, 3vw, 2rem)', fontWeight: 900, letterSpacing: '-0.5px', marginBottom: '2rem' }}>
+          Shopping Cart
+          <span style={{ fontSize: '1rem', fontWeight: 500, color: 'var(--text-muted)', marginLeft: '0.75rem' }}>
+            ({cartItems.length} {cartItems.length === 1 ? 'item' : 'items'})
+          </span>
+        </h1>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 340px', gap: '2rem', alignItems: 'start' }}>
+
+          {/* Cart Items */}
+          <div>
+            {cartItems.map(item => (
+              <div key={item.id} className="cart-item animate-fade-up">
+                <img
+                  src={item.imagePath || item.imageUrl || FALLBACK_IMAGE_URI}
                   alt={item.name}
-                  style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: '4px' }}
+                  className="cart-item__image"
+                  onError={handleImageError}
                 />
-                <div>
-                  <h4>{item.name}</h4>
-                  <p style={{ color: '#666' }}>${item.price}</p>
+                <div className="cart-item__info">
+                  <div className="cart-item__name">{item.name}</div>
+                  {item.category && <div className="cart-item__cat">{item.category}</div>}
+                  <div className="cart-item__price">${Number(item.price).toFixed(2)}</div>
                 </div>
-              </div>
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <button 
-                    onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                    className="btn"
-                    style={{ padding: '0.25rem 0.5rem' }}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.75rem' }}>
+                  <div className="qty-stepper">
+                    <button onClick={() => updateQuantity(item.id, item.quantity - 1)}>−</button>
+                    <span>{item.quantity}</span>
+                    <button onClick={() => updateQuantity(item.id, item.quantity + 1)}>+</button>
+                  </div>
+                  <div style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--text-primary)' }}>
+                    ${(item.price * item.quantity).toFixed(2)}
+                  </div>
+                  <button
+                    onClick={() => handleRemove(item)}
+                    className="btn btn-ghost btn-sm"
+                    style={{ color: 'var(--danger)', borderColor: 'var(--danger-alpha)' }}
                   >
-                    -
-                  </button>
-                  <span style={{ padding: '0 1rem' }}>{item.quantity}</span>
-                  <button 
-                    onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                    className="btn"
-                    style={{ padding: '0.25rem 0.5rem' }}
-                  >
-                    +
+                    Remove
                   </button>
                 </div>
-                
-                <div style={{ minWidth: '80px', textAlign: 'center' }}>
-                  <strong>${(item.price * item.quantity).toFixed(2)}</strong>
-                </div>
-                
-                <button 
-                  onClick={() => removeFromCart(item.id)}
-                  className="btn"
-                  style={{ background: '#e74c3c', color: 'white' }}
-                >
-                  Remove
-                </button>
               </div>
-            </div>
-          ))}
-        </div>
-        
-        <div style={{ background: 'white', padding: '2rem', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
-          <h3>Order Summary</h3>
-          <div style={{ margin: '1.5rem 0' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
-              <span>Subtotal:</span>
-              <span>${getTotalPrice().toFixed(2)}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
-              <span>Shipping:</span>
-              <span>$5.00</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', fontSize: '1.2rem', fontWeight: 'bold' }}>
-              <span>Total:</span>
-              <span>${(getTotalPrice() + 5).toFixed(2)}</span>
+            ))}
+
+            <div style={{ marginTop: '1rem' }}>
+              <Link to="/products" className="btn btn-ghost">← Continue Shopping</Link>
             </div>
           </div>
-          
-          <button 
-            onClick={proceedToCheckout}
-            className="btn btn-success"
-            style={{ width: '100%', fontSize: '1.1rem' }}
-            disabled={!user}
-          >
-            {user ? 'Proceed to Checkout' : 'Login to Checkout'}
-          </button>
-          
-          {!user && (
-            <p style={{ textAlign: 'center', marginTop: '1rem', color: '#666' }}>
-              Please login to complete your purchase
-            </p>
-          )}
+
+          {/* Order Summary */}
+          <div className="order-summary animate-fade-up">
+            <h3>Order Summary</h3>
+
+            {cartItems.map(item => (
+              <div key={item.id} className="summary-row" style={{ paddingBottom: '0.5rem', borderBottom: '1px solid var(--bg-secondary)' }}>
+                <span style={{ flex: 1, marginRight: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                  {item.name} × {item.quantity}
+                </span>
+                <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>
+                  ${(item.price * item.quantity).toFixed(2)}
+                </span>
+              </div>
+            ))}
+
+            <div style={{ marginTop: '1rem' }}>
+              <div className="summary-row">
+                <span>Subtotal</span>
+                <span>${cartTotal.toFixed(2)}</span>
+              </div>
+              <div className="summary-row">
+                <span>Delivery</span>
+                <span>${shipping.toFixed(2)}</span>
+              </div>
+              <div className="summary-row total">
+                <span>Total</span>
+                <span>${total.toFixed(2)}</span>
+              </div>
+            </div>
+
+            <button
+              onClick={proceedToCheckout}
+              className="btn btn-primary btn-full"
+              style={{ marginTop: '1.5rem', fontSize: '1rem', padding: '0.95rem' }}
+            >
+              {user ? 'Proceed to Checkout →' : 'Login to Checkout'}
+            </button>
+
+            {!user && (
+              <p style={{ textAlign: 'center', marginTop: '0.75rem', fontSize: '0.825rem', color: 'var(--text-muted)' }}>
+                <Link to="/login" style={{ color: 'var(--primary)', fontWeight: 600 }}>Login</Link> to complete your purchase
+              </p>
+            )}
+
+            <div className="trust-strip" style={{ marginTop: '1.5rem', flexDirection: 'column', gap: '0.6rem', padding: '1rem', fontSize: '0.8rem' }}>
+              {['🔒 Secure Checkout', '🚚 Fast Delivery', '↩️ Easy Returns'].map(t => (
+                <div key={t} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-muted)' }}>{t}</div>
+              ))}
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
   )
 }
-
-export default Cart

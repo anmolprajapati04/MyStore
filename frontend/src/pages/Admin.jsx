@@ -1,492 +1,382 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useToast } from '../components/Toast'
+import { handleImageError, FALLBACK_IMAGE_URI } from '../utils/imageUtils'
 import axios from 'axios'
 
-const Admin = () => {
-  const [activeTab, setActiveTab] = useState('products')
-  const [products, setProducts] = useState([])
-  const [orders, setOrders] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [showProductForm, setShowProductForm] = useState(false)
-  const [productForm, setProductForm] = useState({
-    name: '',
-    description: '',
-    price: '',
-    stockQuantity: '',
-    category: '',
-    image: null
-  })
-  const [imagePreview, setImagePreview] = useState('')
-  const { user } = useAuth()
+const ORDER_STATUSES = ['PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED', 'CANCELLED']
 
-  // Function to get full image URL
-  const getImageUrl = (imagePath) => {
-    if (!imagePath) return '/api/placeholder/200/200';
-    
-    // If it's already a full URL, return as is
-    if (imagePath.startsWith('http')) return imagePath;
-    
-    // If it's a relative path, prepend the backend base URL
-    // Since we're using the gateway on port 8080, we can use relative paths
-    return imagePath;
-  }
+export default function Admin() {
+  const { user }   = useAuth()
+  const toast      = useToast()
+  const navigate   = useNavigate()
+
+  const [activeTab,       setActiveTab]       = useState('products')
+  const [products,        setProducts]        = useState([])
+  const [orders,          setOrders]          = useState([])
+  const [loadingData,     setLoadingData]     = useState(false)
+  const [showForm,        setShowForm]        = useState(false)
+  const [formLoading,     setFormLoading]     = useState(false)
+  const [imagePreview,    setImagePreview]    = useState('')
+  const [productForm,     setProductForm]     = useState({
+    name: '', description: '', price: '', stockQuantity: '', category: '', image: null,
+  })
+  const hasFetchedProducts = useRef(false)
+  const hasFetchedOrders   = useRef(false)
 
   useEffect(() => {
-    if (user && user.role === 'ROLE_ADMIN') {
-      if (activeTab === 'products') {
-        fetchProducts()
-      } else if (activeTab === 'orders') {
-        fetchOrders()
-      }
+    if (!user || user.role !== 'ROLE_ADMIN') {
+      navigate('/')
+      return
+    }
+  }, [user])
+
+  useEffect(() => {
+    if (!user || user.role !== 'ROLE_ADMIN') return
+    if (activeTab === 'products' && !hasFetchedProducts.current) {
+      hasFetchedProducts.current = true
+      fetchProducts()
+    }
+    if (activeTab === 'orders' && !hasFetchedOrders.current) {
+      hasFetchedOrders.current = true
+      fetchOrders()
     }
   }, [activeTab, user])
 
+  // ── Data fetchers ──────────────────────────────────────────────
   const fetchProducts = async () => {
-    try {
-      const response = await axios.get('/api/products')
-      // Process products to ensure image URLs are correct
-      const processedProducts = response.data.map(product => ({
-        ...product,
-        imagePath: getImageUrl(product.imagePath)
-      }))
-      setProducts(processedProducts)
-    } catch (error) {
-      console.error('Error fetching products:', error)
-    }
+    try { setLoadingData(true); const r = await axios.get('/api/products'); setProducts(r.data) }
+    catch { toast.error('Failed to load products.') }
+    finally { setLoadingData(false) }
   }
 
   const fetchOrders = async () => {
-    try {
-      const response = await axios.get('/api/orders')
-      setOrders(response.data)
-    } catch (error) {
-      console.error('Error fetching orders:', error)
-    }
+    try { setLoadingData(true); const r = await axios.get('/api/orders'); setOrders(r.data) }
+    catch { toast.error('Failed to load orders.') }
+    finally { setLoadingData(false) }
   }
 
+  // ── Handlers ───────────────────────────────────────────────────
   const handleImageChange = (e) => {
     const file = e.target.files[0]
-    if (file) {
-      setProductForm({
-        ...productForm,
-        image: file
-      })
-      // Create preview URL
-      setImagePreview(URL.createObjectURL(file))
-    }
+    if (!file) return
+    setProductForm(f => ({ ...f, image: file }))
+    setImagePreview(URL.createObjectURL(file))
+  }
+
+  const resetForm = () => {
+    setProductForm({ name: '', description: '', price: '', stockQuantity: '', category: '', image: null })
+    setImagePreview('')
+    setShowForm(false)
   }
 
   const handleProductSubmit = async (e) => {
     e.preventDefault()
-    setLoading(true)
-
+    setFormLoading(true)
     try {
-      const formData = new FormData()
-      formData.append('name', productForm.name)
-      formData.append('description', productForm.description)
-      formData.append('price', productForm.price)
-      formData.append('stockQuantity', productForm.stockQuantity)
-      formData.append('category', productForm.category)
-      if (productForm.image) {
-        formData.append('image', productForm.image)
-      }
+      const fd = new FormData()
+      fd.append('name',          productForm.name)
+      fd.append('description',   productForm.description)
+      fd.append('price',         productForm.price)
+      fd.append('stockQuantity', productForm.stockQuantity)
+      fd.append('category',      productForm.category)
+      if (productForm.image) fd.append('image', productForm.image)
 
-      await axios.post('/api/products', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      })
-      
-      // Reset form
-      setProductForm({
-        name: '',
-        description: '',
-        price: '',
-        stockQuantity: '',
-        category: '',
-        image: null
-      })
-      setImagePreview('')
-      setShowProductForm(false)
+      await axios.post('/api/products', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      toast.success('Product created successfully! ✓')
+      resetForm()
+      hasFetchedProducts.current = false
       fetchProducts()
-      alert('Product created successfully!')
-    } catch (error) {
-      console.error('Error creating product:', error)
-      alert('Failed to create product')
+    } catch {
+      toast.error('Failed to create product.')
     } finally {
-      setLoading(false)
+      setFormLoading(false)
     }
   }
 
-  const deleteProduct = async (productId) => {
-    if (window.confirm('Are you sure you want to delete this product?')) {
-      try {
-        await axios.delete(`/api/products/${productId}`)
-        fetchProducts()
-        alert('Product deleted successfully!')
-      } catch (error) {
-        console.error('Error deleting product:', error)
-        alert('Failed to delete product')
-      }
-    }
-  }
-
-  const updateOrderStatus = async (orderId, newStatus) => {
+  const deleteProduct = async (id, name) => {
+    if (!window.confirm(`Delete "${name}"?`)) return
     try {
-      await axios.put(`/api/orders/${orderId}/status?status=${newStatus}`)
-      fetchOrders()
-      alert('Order status updated successfully!')
-    } catch (error) {
-      console.error('Error updating order status:', error)
-      alert('Failed to update order status')
+      await axios.delete(`/api/products/${id}`)
+      toast.success(`"${name}" deleted.`)
+      setProducts(p => p.filter(x => x.id !== id))
+    } catch {
+      toast.error('Failed to delete product.')
     }
   }
 
-  const clearImage = () => {
-    setProductForm({
-      ...productForm,
-      image: null
-    })
-    setImagePreview('')
+  const updateOrderStatus = async (orderId, status) => {
+    try {
+      await axios.put(`/api/orders/${orderId}/status?status=${status}`)
+      setOrders(o => o.map(x => x.id === orderId ? { ...x, status } : x))
+      toast.success('Order status updated.')
+    } catch {
+      toast.error('Failed to update order status.')
+    }
   }
 
-  if (!user || user.role !== 'ROLE_ADMIN') {
-    return (
-      <div className="container">
-        <div style={{ textAlign: 'center', padding: '4rem 0' }}>
-          <h2>Access Denied</h2>
-          <p>You need administrator privileges to access this page.</p>
-        </div>
-      </div>
-    )
-  }
+  if (!user || user.role !== 'ROLE_ADMIN') return null
+
+  // ── Derived stats ───────────────────────────────────────────────
+  const totalRevenue  = orders.reduce((s, o) => s + (o.totalAmount || 0), 0)
+  const inStock       = products.filter(p => p.stockQuantity > 0).length
+  const pendingOrders = orders.filter(o => o.status === 'PENDING').length
+
+  const formInput = (key, label, type = 'text', extra = {}) => (
+    <div className="form-group">
+      <label className="form-label">{label}</label>
+      <input
+        type={type}
+        className="form-control"
+        value={productForm[key]}
+        onChange={e => setProductForm(f => ({ ...f, [key]: e.target.value }))}
+        required
+        {...extra}
+      />
+    </div>
+  )
 
   return (
-    <div className="container">
-      <h1 style={{ margin: '2rem 0' }}>Admin Dashboard</h1>
-      
-      <div style={{ marginBottom: '2rem' }}>
-        <button 
-          onClick={() => setActiveTab('products')}
-          className={`btn ${activeTab === 'products' ? 'btn-primary' : ''}`}
-          style={{ marginRight: '1rem' }}
-        >
-          Manage Products
-        </button>
-        <button 
-          onClick={() => setActiveTab('orders')}
-          className={`btn ${activeTab === 'orders' ? 'btn-primary' : ''}`}
-        >
-          Manage Orders
-        </button>
-      </div>
+    <div style={{ paddingTop: 'var(--nav-height)' }}>
+      <div className="container" style={{ paddingBottom: '4rem' }}>
 
-      {activeTab === 'products' && (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
-            <h2>Products Management</h2>
-            <button 
-              onClick={() => setShowProductForm(true)}
-              className="btn btn-success"
-            >
-              Add New Product
-            </button>
-          </div>
+        <div className="admin-layout">
 
-          {showProductForm && (
-            <div style={{ background: 'white', padding: '2rem', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', marginBottom: '2rem' }}>
-              <h3>Add New Product</h3>
-              <form onSubmit={handleProductSubmit}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                  <div className="form-group">
-                    <label>Product Name *</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={productForm.name}
-                      onChange={(e) => setProductForm({...productForm, name: e.target.value})}
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Category *</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={productForm.category}
-                      onChange={(e) => setProductForm({...productForm, category: e.target.value})}
-                      required
-                    />
-                  </div>
-                </div>
-                
-                <div className="form-group">
-                  <label>Description</label>
-                  <textarea
-                    className="form-control"
-                    rows="3"
-                    value={productForm.description}
-                    onChange={(e) => setProductForm({...productForm, description: e.target.value})}
-                  />
-                </div>
-                
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                  <div className="form-group">
-                    <label>Price *</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="form-control"
-                      value={productForm.price}
-                      onChange={(e) => setProductForm({...productForm, price: e.target.value})}
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Stock Quantity *</label>
-                    <input
-                      type="number"
-                      className="form-control"
-                      value={productForm.stockQuantity}
-                      onChange={(e) => setProductForm({...productForm, stockQuantity: e.target.value})}
-                      required
-                    />
-                  </div>
-                </div>
-                
-                <div className="form-group">
-                  <label>Product Image</label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    className="form-control"
-                  />
-                  {imagePreview && (
-                    <div style={{ marginTop: '1rem', position: 'relative', display: 'inline-block' }}>
-                      <img 
-                        src={imagePreview} 
-                        alt="Preview" 
-                        style={{ 
-                          width: '150px', 
-                          height: '150px', 
-                          objectFit: 'cover', 
-                          borderRadius: '8px',
-                          border: '2px solid var(--border)'
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={clearImage}
-                        style={{
-                          position: 'absolute',
-                          top: '-8px',
-                          right: '-8px',
-                          background: 'var(--danger)',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '50%',
-                          width: '24px',
-                          height: '24px',
-                          cursor: 'pointer',
-                          fontSize: '12px'
-                        }}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  )}
-                  <small style={{ color: 'var(--text-secondary)', display: 'block', marginTop: '0.5rem' }}>
-                    Supported formats: JPG, PNG, GIF, WEBP. Max size: 10MB
-                  </small>
-                </div>
-                
-                <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem' }}>
-                  <button type="submit" className="btn btn-success" disabled={loading}>
-                    {loading ? 'Creating...' : 'Create Product'}
-                  </button>
-                  <button 
-                    type="button" 
-                    className="btn btn-outline"
-                    onClick={() => {
-                      setShowProductForm(false)
-                      setProductForm({
-                        name: '',
-                        description: '',
-                        price: '',
-                        stockQuantity: '',
-                        category: '',
-                        image: null
-                      })
-                      setImagePreview('')
-                    }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-
-          <div style={{ display: 'grid', gap: '1.5rem' }}>
-            {products.map(product => (
-              <div key={product.id} style={{ 
-                background: 'white', 
-                padding: '1.5rem', 
-                borderRadius: '12px', 
-                boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                border: '1px solid var(--border)'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-                  <img 
-                    src={getImageUrl(product.imagePath)}
-                    alt={product.name}
-                    style={{ 
-                      width: '80px', 
-                      height: '80px', 
-                      objectFit: 'cover', 
-                      borderRadius: '8px',
-                      border: '1px solid var(--border)'
-                    }}
-                    onError={(e) => {
-                      e.target.src = '/api/placeholder/80/80'
-                      console.error('Image failed to load in Admin:', product.imagePath)
-                    }}
-                  />
-                  <div>
-                    <h4 style={{ margin: 0, color: 'var(--text-primary)' }}>{product.name}</h4>
-                    <p style={{ margin: '0.25rem 0', color: 'var(--text-secondary)' }}>
-                      {product.category} • ${product.price} • Stock: {product.stockQuantity}
-                    </p>
-                    {product.description && (
-                      <p style={{ margin: '0.25rem 0 0 0', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                        {product.description.length > 100 
-                          ? `${product.description.substring(0, 100)}...` 
-                          : product.description
-                        }
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <button 
-                  onClick={() => deleteProduct(product.id)}
-                  className="btn"
-                  style={{ 
-                    background: 'var(--danger)', 
-                    color: 'white',
-                    padding: '0.5rem 1rem',
-                    fontSize: '0.875rem'
-                  }}
-                >
-                  Delete
-                </button>
+          {/* ── Sidebar ─────────────────────────────────── */}
+          <div className="admin-sidebar">
+            <div style={{ padding: '0.5rem 1rem 1rem', borderBottom: '1px solid var(--border)', marginBottom: '0.5rem' }}>
+              <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>
+                Admin Panel
               </div>
+              <div style={{ fontWeight: 800, color: 'var(--text-primary)', marginTop: '0.2rem' }}>
+                {user.username}
+              </div>
+            </div>
+            {[
+              { key: 'products', icon: '📦', label: 'Products' },
+              { key: 'orders',   icon: '📋', label: 'Orders'   },
+            ].map(item => (
+              <button
+                key={item.key}
+                className={`admin-nav-item${activeTab === item.key ? ' active' : ''}`}
+                onClick={() => setActiveTab(item.key)}
+              >
+                <span>{item.icon}</span>
+                <span>{item.label}</span>
+                {item.key === 'orders' && pendingOrders > 0 && (
+                  <span style={{ marginLeft: 'auto', background: 'var(--danger)', color: '#fff', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', fontWeight: 700 }}>
+                    {pendingOrders}
+                  </span>
+                )}
+              </button>
             ))}
           </div>
 
-          {products.length === 0 && !showProductForm && (
-            <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📦</div>
-              <h3>No Products Yet</h3>
-              <p>Get started by adding your first product!</p>
-            </div>
-          )}
-        </div>
-      )}
+          {/* ── Main Content ─────────────────────────────── */}
+          <div>
 
-      {activeTab === 'orders' && (
-        <div>
-          <h2 style={{ marginBottom: '1.5rem' }}>Orders Management</h2>
-          <div style={{ display: 'grid', gap: '1.5rem' }}>
-            {orders.map(order => (
-              <div key={order.id} style={{ 
-                background: 'white', 
-                padding: '1.5rem', 
-                borderRadius: '12px', 
-                boxShadow: '0 2px 12px rgba(0,0,0,0.1)',
-                border: '1px solid var(--border)'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-                  <div>
-                    <h4 style={{ margin: 0, color: 'var(--text-primary)' }}>Order #{order.id}</h4>
-                    <p style={{ margin: '0.5rem 0', color: 'var(--text-secondary)' }}>
-                      Customer: {order.customerName} ({order.customerEmail})
-                    </p>
-                    <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
-                      Placed on {new Date(order.orderDate).toLocaleDateString()} at {new Date(order.orderDate).toLocaleTimeString()}
-                    </p>
-                    <p style={{ margin: '0.5rem 0 0 0', color: 'var(--text-secondary)' }}>
-                      Payment: {order.paymentMethod} • Shipping: {order.shippingAddress?.city}, {order.shippingAddress?.state}
-                    </p>
+            {/* Stats row */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.25rem', marginBottom: '2rem' }}>
+              {[
+                { label: 'Total Products', value: products.length, icon: '📦', color: 'var(--primary)' },
+                { label: 'Total Orders',   value: orders.length,   icon: '📋', color: 'var(--success)' },
+                { label: 'Revenue',        value: `$${totalRevenue.toFixed(0)}`, icon: '💰', color: 'var(--accent)' },
+              ].map(stat => (
+                <div key={stat.label} className="admin-stat-card">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                    <span style={{ fontSize: '1.5rem' }}>{stat.icon}</span>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ marginBottom: '0.75rem', fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--primary)' }}>
-                      ${order.totalAmount?.toFixed(2)}
-                    </div>
-                    <select 
-                      value={order.status}
-                      onChange={(e) => updateOrderStatus(order.id, e.target.value)}
-                      style={{ 
-                        padding: '0.5rem 1rem', 
-                        borderRadius: '8px', 
-                        border: '1px solid var(--border)',
-                        background: 'var(--surface)',
-                        color: 'var(--text-primary)',
-                        fontSize: '0.875rem',
-                        fontWeight: '500'
-                      }}
-                    >
-                      <option value="PENDING">⏳ Pending</option>
-                      <option value="CONFIRMED">✅ Confirmed</option>
-                      <option value="SHIPPED">🚚 Shipped</option>
-                      <option value="DELIVERED">📦 Delivered</option>
-                      <option value="CANCELLED">❌ Cancelled</option>
-                    </select>
-                  </div>
+                  <div className="admin-stat-value" style={{ color: stat.color }}>{stat.value}</div>
+                  <div className="admin-stat-label">{stat.label}</div>
                 </div>
-                
-                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
-                  <strong style={{ color: 'var(--text-primary)' }}>Order Items:</strong>
-                  <div style={{ marginTop: '0.75rem' }}>
-                    {order.orderItems?.map(item => (
-                      <div key={item.id} style={{ 
-                        display: 'flex', 
-                        justifyContent: 'space-between', 
-                        alignItems: 'center',
-                        padding: '0.5rem 0',
-                        borderBottom: '1px solid var(--border)'
-                      }}>
-                        <div>
-                          <span style={{ fontWeight: '500' }}>{item.productName}</span>
-                          <span style={{ color: 'var(--text-secondary)', marginLeft: '0.5rem' }}>
-                            (Qty: {item.quantity})
-                          </span>
-                        </div>
-                        <div style={{ fontWeight: '600', color: 'var(--primary)' }}>
-                          ${item.subtotal?.toFixed(2)}
+              ))}
+            </div>
+
+            {/* ── PRODUCTS TAB ─────────── */}
+            {activeTab === 'products' && (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                  <h2 style={{ fontSize: '1.25rem', fontWeight: 800 }}>Products ({products.length})</h2>
+                  <button className="btn btn-success btn-sm" onClick={() => setShowForm(s => !s)}>
+                    {showForm ? '✕ Cancel' : '+ Add Product'}
+                  </button>
+                </div>
+
+                {/* Add Product Form */}
+                {showForm && (
+                  <div className="card animate-fade-up" style={{ padding: '1.75rem', marginBottom: '1.5rem' }}>
+                    <h3 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '1.5rem' }}>New Product</h3>
+                    <form onSubmit={handleProductSubmit}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        {formInput('name',     'Product Name *')}
+                        {formInput('category', 'Category *')}
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Description</label>
+                        <textarea
+                          className="form-control"
+                          rows={3}
+                          value={productForm.description}
+                          onChange={e => setProductForm(f => ({ ...f, description: e.target.value }))}
+                        />
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        {formInput('price',         'Price *',          'number', { step: '0.01', min: '0' })}
+                        {formInput('stockQuantity', 'Stock Quantity *', 'number', { min: '0' })}
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Product Image</label>
+                        <input type="file" accept="image/*" className="form-control" onChange={handleImageChange} />
+                        {imagePreview && (
+                          <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                            <img src={imagePreview} alt="Preview" style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }} />
+                            <button type="button" className="btn btn-ghost btn-sm" onClick={() => { setImagePreview(''); setProductForm(f => ({ ...f, image: null })) }}>
+                              Remove
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                        <button type="submit" className="btn btn-success" disabled={formLoading}>
+                          {formLoading ? '⏳ Creating…' : '✓ Create Product'}
+                        </button>
+                        <button type="button" className="btn btn-ghost" onClick={resetForm}>Cancel</button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {/* Product list */}
+                {loadingData ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {[1,2,3].map(i => (
+                      <div key={i} className="card" style={{ padding: '1.25rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                        <div className="skeleton" style={{ width: 64, height: 64, borderRadius: 'var(--radius)', flexShrink: 0 }} />
+                        <div style={{ flex: 1 }}>
+                          <div className="skeleton skeleton-text" style={{ width: '50%', height: '1rem' }} />
+                          <div className="skeleton skeleton-text" style={{ width: '30%', height: '0.85rem' }} />
                         </div>
                       </div>
                     ))}
                   </div>
-                </div>
+                ) : products.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-state__icon">📦</div>
+                    <h2>No Products Yet</h2>
+                    <p>Click "Add Product" to create your first listing.</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+                    {products.map(product => (
+                      <div key={product.id} className="card animate-fade-up" style={{ padding: '1.25rem', display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+                        <img
+                          src={product.imagePath || FALLBACK_IMAGE_URI}
+                          alt={product.name}
+                          onError={handleImageError}
+                          style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 'var(--radius)', border: '1px solid var(--border)', flexShrink: 0, background: 'var(--bg-secondary)' }}
+                        />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.95rem', marginBottom: '0.2rem' }}>{product.name}</div>
+                          <div style={{ fontSize: '0.825rem', color: 'var(--text-muted)' }}>
+                            {product.category} &nbsp;·&nbsp; ${Number(product.price).toFixed(2)} &nbsp;·&nbsp;
+                            <span style={{ color: product.stockQuantity === 0 ? 'var(--danger)' : 'var(--success)', fontWeight: 600 }}>
+                              {product.stockQuantity === 0 ? 'Out of stock' : `${product.stockQuantity} in stock`}
+                            </span>
+                          </div>
+                          {product.description && (
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.2rem', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', maxWidth: '400px' }}>
+                              {product.description}
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          className="btn btn-danger btn-sm"
+                          onClick={() => deleteProduct(product.id, product.name)}
+                          style={{ flexShrink: 0 }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
+            )}
 
-          {orders.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📋</div>
-              <h3>No Orders Yet</h3>
-              <p>Orders will appear here when customers make purchases.</p>
-            </div>
-          )}
+            {/* ── ORDERS TAB ──────────── */}
+            {activeTab === 'orders' && (
+              <div>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '1.5rem' }}>
+                  Orders ({orders.length})
+                </h2>
+
+                {loadingData ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {[1,2,3].map(i => (
+                      <div key={i} className="card" style={{ padding: '1.5rem' }}>
+                        <div className="skeleton skeleton-text" style={{ width: '40%', height: '1rem' }} />
+                        <div className="skeleton skeleton-text" style={{ width: '60%', height: '0.85rem' }} />
+                      </div>
+                    ))}
+                  </div>
+                ) : orders.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-state__icon">📋</div>
+                    <h2>No Orders Yet</h2>
+                    <p>Orders will appear here when customers make purchases.</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {orders.map(order => (
+                      <div key={order.id} className="card animate-fade-up" style={{ padding: '1.5rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
+                          <div>
+                            <div style={{ fontWeight: 800, fontSize: '1rem' }}>Order #{order.id}</div>
+                            <div style={{ fontSize: '0.825rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                              {order.customerName} &nbsp;·&nbsp; {order.customerEmail}
+                            </div>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                              {order.orderDate ? new Date(order.orderDate).toLocaleString() : '—'}
+                              &nbsp;·&nbsp; {order.paymentMethod?.replace(/_/g, ' ')}
+                              &nbsp;·&nbsp; 📍 {order.shippingAddress?.city}, {order.shippingAddress?.state}
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
+                            <div style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--primary)' }}>
+                              ${order.totalAmount?.toFixed(2)}
+                            </div>
+                            <select
+                              value={order.status}
+                              onChange={e => updateOrderStatus(order.id, e.target.value)}
+                              className="form-control"
+                              style={{ width: 'auto', padding: '0.4rem 0.75rem', fontSize: '0.825rem' }}
+                            >
+                              {ORDER_STATUSES.map(s => (
+                                <option key={s} value={s}>{s}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.875rem' }}>
+                          {order.orderItems?.map(item => (
+                            <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', padding: '0.35rem 0', color: 'var(--text-secondary)' }}>
+                              <span>{item.productName} <span style={{ color: 'var(--text-muted)' }}>× {item.quantity}</span></span>
+                              <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>${item.subtotal?.toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+          </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }
-
-export default Admin
