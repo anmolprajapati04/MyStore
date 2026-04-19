@@ -4,9 +4,9 @@ import { useAuth } from '../context/AuthContext'
 import { useToast } from '../components/Toast'
 
 export default function Login() {
-  const [form, setForm]       = useState({ username: '', password: '' })
+  const [form,    setForm]    = useState({ username: '', password: '' })
   const [loading, setLoading] = useState(false)
-  const [showPw, setShowPw]   = useState(false)
+  const [showPw,  setShowPw]  = useState(false)
   const { login }  = useAuth()
   const toast      = useToast()
   const navigate   = useNavigate()
@@ -27,98 +27,91 @@ export default function Login() {
   }
 
   return (
-    <div style={{ minHeight: 'calc(100vh - var(--nav-height))', paddingTop: 'var(--nav-height)' }}>
-      <div className="auth-layout">
-
-        {/* Brand Panel */}
-        <div className="auth-brand-panel">
-          <div style={{ position: 'relative', zIndex: 2 }}>
-            <div style={{ fontSize: '2.5rem', fontWeight: 900, letterSpacing: '-1px', marginBottom: '1rem' }}>
-              MyStore
-            </div>
-            <h2 style={{ fontSize: '2rem', fontWeight: 800, lineHeight: 1.2, marginBottom: '1.25rem' }}>
-              Your favourite<br />store awaits
-            </h2>
-            <p style={{ opacity: 0.75, lineHeight: 1.7, maxWidth: 340, fontSize: '1rem' }}>
-              Sign in to access your cart, track orders, and enjoy personalised shopping recommendations.
-            </p>
-            <div style={{ marginTop: '2.5rem', display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
-              {['50,000+ products', '120K+ happy customers', '30-day easy returns'].map(t => (
-                <div key={t} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', opacity: 0.85, fontSize: '0.9rem' }}>
-                  <span style={{ color: '#a5b4fc' }}>✓</span> {t}
-                </div>
-              ))}
-            </div>
+    <div className="auth2-page">
+      {/* Left — branding */}
+      <div className="auth2-left">
+        <div className="auth2-left-orb auth2-orb-1" />
+        <div className="auth2-left-orb auth2-orb-2" />
+        <div className="auth2-left-content">
+          <div className="auth2-logo">🛍️ MyStore</div>
+          <h2 className="auth2-brand-title">Your favourite<br />store awaits</h2>
+          <p className="auth2-brand-sub">
+            Sign in to access your cart, track orders, and enjoy personalised shopping recommendations.
+          </p>
+          <ul className="auth2-perks">
+            {['50,000+ curated products', '120K+ happy customers', '30-day easy returns', '24/7 live support'].map(t => (
+              <li key={t}>
+                <span className="auth2-perk-check">✓</span>{t}
+              </li>
+            ))}
+          </ul>
+          <div className="auth2-review">
+            <div className="auth2-review-stars">★★★★★</div>
+            <p className="auth2-review-text">"Fastest delivery I've ever experienced. Love this store!"</p>
+            <span className="auth2-review-author">— Priya S., Verified Buyer</span>
           </div>
         </div>
+      </div>
 
-        {/* Form Panel */}
-        <div className="auth-panel">
-          <div className="auth-form-wrap">
-            <h1 style={{ fontSize: '1.875rem', fontWeight: 900, marginBottom: '0.5rem', letterSpacing: '-0.5px' }}>
-              Welcome back
-            </h1>
-            <p style={{ color: 'var(--text-muted)', marginBottom: '2rem', fontSize: '0.95rem' }}>
-              Don't have an account?{' '}
-              <Link to="/register" style={{ color: 'var(--primary)', fontWeight: 600 }}>Sign up free</Link>
+      {/* Right — form */}
+      <div className="auth2-right">
+        <div className="auth2-card">
+          <div className="auth2-card-header">
+            <h1 className="auth2-title">Welcome back 👋</h1>
+            <p className="auth2-subtitle">
+              New here?{' '}
+              <Link to="/register" className="auth2-link">Create a free account</Link>
             </p>
+          </div>
 
-            <form onSubmit={handleSubmit} noValidate>
-              <div className="form-group">
-                <label className="form-label">Username</label>
+          <form onSubmit={handleSubmit} noValidate className="auth2-form">
+            <div className="auth2-field">
+              <label className="auth2-label">Username</label>
+              <div className="auth2-input-wrap">
+                <span className="auth2-input-icon">👤</span>
                 <input
-                  type="text"
-                  name="username"
-                  className="form-control"
+                  type="text" name="username"
+                  className="auth2-input"
                   placeholder="Enter your username"
                   value={form.username}
                   onChange={handleChange}
-                  required
-                  autoComplete="username"
-                  autoFocus
+                  required autoFocus autoComplete="username"
                 />
               </div>
+            </div>
 
-              <div className="form-group">
-                <label className="form-label">Password</label>
-                <div style={{ position: 'relative' }}>
-                  <input
-                    type={showPw ? 'text' : 'password'}
-                    name="password"
-                    className="form-control"
-                    placeholder="Enter your password"
-                    value={form.password}
-                    onChange={handleChange}
-                    required
-                    autoComplete="current-password"
-                    style={{ paddingRight: '3rem' }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPw(v => !v)}
-                    style={{
-                      position: 'absolute', right: '1rem', top: '50%', transform: 'translateY(-50%)',
-                      background: 'none', border: 'none', cursor: 'pointer',
-                      color: 'var(--text-muted)', fontSize: '0.85rem', fontWeight: 600,
-                    }}
-                  >
-                    {showPw ? 'Hide' : 'Show'}
-                  </button>
-                </div>
+            <div className="auth2-field">
+              <label className="auth2-label">Password</label>
+              <div className="auth2-input-wrap">
+                <span className="auth2-input-icon">🔒</span>
+                <input
+                  type={showPw ? 'text' : 'password'} name="password"
+                  className="auth2-input"
+                  placeholder="Enter your password"
+                  value={form.password}
+                  onChange={handleChange}
+                  required autoComplete="current-password"
+                />
+                <button type="button" className="auth2-pw-toggle" onClick={() => setShowPw(v => !v)}>
+                  {showPw ? '🙈' : '👁️'}
+                </button>
               </div>
+            </div>
 
-              <button
-                type="submit"
-                className="btn btn-primary btn-full"
-                style={{ fontSize: '1rem', padding: '0.95rem', marginTop: '0.5rem' }}
-                disabled={loading}
-              >
-                {loading ? '⏳ Signing In…' : 'Sign In'}
-              </button>
-            </form>
+            <button type="submit" className="auth2-submit" disabled={loading}>
+              {loading
+                ? <><span className="auth2-spinner" />Signing In…</>
+                : <>Sign In <span>→</span></>
+              }
+            </button>
+          </form>
+
+          <div className="auth2-divider"><span>or continue with</span></div>
+          <div className="auth2-social">
+            <button className="auth2-social-btn">🌐 Google</button>
+            <button className="auth2-social-btn">📘 Facebook</button>
           </div>
         </div>
-
       </div>
     </div>
   )

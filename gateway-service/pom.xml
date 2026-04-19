@@ -46,6 +46,12 @@
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-aop</artifactId>
     </dependency>
+
+    <!-- Explicitly configure security to disable CSRF/block-all default -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-security</artifactId>
+    </dependency>
 </dependencies>
 
     

@@ -8,8 +8,7 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 
 public class OrderRequest {
-    @NotNull
-    private Long userId;
+    private String userId;
 
     @NotBlank
     private String customerName;
@@ -29,8 +28,8 @@ public class OrderRequest {
     private String paymentMethod;
 
     // Getters and setters
-    public Long getUserId() { return userId; }
-    public void setUserId(Long userId) { this.userId = userId; }
+    public String getUserId() { return userId; }
+    public void setUserId(String userId) { this.userId = userId; }
     public String getCustomerName() { return customerName; }
     public void setCustomerName(String customerName) { this.customerName = customerName; }
     public String getCustomerEmail() { return customerEmail; }

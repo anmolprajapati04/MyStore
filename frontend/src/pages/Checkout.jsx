@@ -58,11 +58,12 @@ export default function Checkout() {
   const placeOrder = async () => {
     setLoading(true)
     try {
+      const token = localStorage.getItem('token')
       const orderData = {
-        userId: 1,
-        customerName: shipping.customerName,
-        customerEmail: user.email || 'user@example.com',
-        paymentMethod: payment.method,
+        userId:         user.username,   // use username as userId string
+        customerName:   shipping.customerName,
+        customerEmail:  user.email || `${user.username}@mystore.com`,
+        paymentMethod:  payment.method,
         shippingAddress: {
           street:  shipping.street,
           city:    shipping.city,
@@ -75,13 +76,16 @@ export default function Checkout() {
           quantity:  item.quantity,
         })),
       }
-      await axios.post('/api/orders', orderData)
+      await axios.post('/api/orders', orderData, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
       clearCart()
       toast.success('🎉 Order placed successfully!')
       navigate('/orders')
     } catch (err) {
       console.error('Order failed:', err)
-      toast.error('Failed to place order. Please try again.')
+      const msg = err.response?.data?.message || err.response?.data || err.message || 'Failed to place order'
+      toast.error(`Order failed: ${msg}`)
     } finally {
       setLoading(false)
     }

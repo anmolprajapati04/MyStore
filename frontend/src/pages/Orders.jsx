@@ -53,9 +53,11 @@ export default function Orders() {
     try {
       setLoading(true)
       setError(null)
-      // Using userId=1 as per existing backend — same as original
-      const res = await axios.get('/api/orders/user/1')
-      setOrders(res.data)
+      const token = localStorage.getItem('token')
+      const headers = token ? { Authorization: `Bearer ${token}` } : {}
+      // Fetch by username (stored as userId in our order service)
+      const res = await axios.get(`/api/orders/user/${user.username}`, { headers })
+      setOrders(Array.isArray(res.data) ? res.data : [])
     } catch (err) {
       console.error('Orders fetch failed:', err)
       setError('Failed to load orders. Please try again.')

@@ -8,46 +8,49 @@ import { ProductCard } from '../components/ProductCard'
 import { SkeletonGrid } from '../components/SkeletonCard'
 
 const SORT_OPTIONS = [
-  { value: 'default',    label: 'Featured' },
-  { value: 'price-asc',  label: 'Price: Low → High' },
-  { value: 'price-desc', label: 'Price: High → Low' },
-  { value: 'name-asc',   label: 'Name: A → Z' },
+  { value: 'default',    label: '✨ Featured' },
+  { value: 'price-asc',  label: '💰 Price: Low → High' },
+  { value: 'price-desc', label: '💎 Price: High → Low' },
+  { value: 'name-asc',   label: '🔤 Name: A → Z' },
 ]
 
+const CATEGORY_ICONS = {
+  Electronics: '📱', Fashion: '👗', Home: '🏠', Sports: '⚽',
+  Beauty: '💄', Books: '📚', Toys: '🧸', Groceries: '🥦',
+}
+
 export default function Products() {
-  const { user } = useAuth()
+  const { user }               = useAuth()
   const { addToCart, cartItems } = useCart()
-  const toast = useToast()
-  const location = useLocation()
-  const navigate = useNavigate()
+  const toast                  = useToast()
+  const location               = useLocation()
+  const navigate               = useNavigate()
 
-  // Read URL params for search + category (set by Hero/Header)
-  const urlParams = new URLSearchParams(location.search)
-  const urlQuery    = urlParams.get('q') || ''
-  const urlCategory = urlParams.get('category') || ''
+  const urlParams      = new URLSearchParams(location.search)
+  const urlQuery       = urlParams.get('q') || ''
+  const urlCategory    = urlParams.get('category') || ''
 
-  const [searchTerm, setSearchTerm]         = useState(urlQuery)
+  const [searchTerm,       setSearchTerm]       = useState(urlQuery)
   const [selectedCategory, setSelectedCategory] = useState(urlCategory)
-  const [sort, setSort]                     = useState('default')
+  const [sort,             setSort]             = useState('default')
+  const [priceMin,         setPriceMin]         = useState('')
+  const [priceMax,         setPriceMax]         = useState('')
+  const [showFilters,      setShowFilters]      = useState(false)
 
   const { products, loading, error, refetch } = useProducts()
 
-  // Sync URL changes into state
   useEffect(() => {
     setSearchTerm(urlQuery)
     setSelectedCategory(urlCategory)
   }, [urlQuery, urlCategory])
 
-  // Unique categories list
   const categories = useMemo(
     () => [...new Set(products.map(p => p.category).filter(Boolean))],
     [products]
   )
 
-  // Filter + sort — fully derived from state, no extra useEffect
   const filtered = useMemo(() => {
     let list = [...products]
-
     if (searchTerm) {
       const q = searchTerm.toLowerCase()
       list = list.filter(p =>
@@ -56,25 +59,17 @@ export default function Products() {
         p.category?.toLowerCase().includes(q)
       )
     }
-
-    if (selectedCategory) {
-      list = list.filter(p => p.category === selectedCategory)
-    }
-
+    if (selectedCategory) list = list.filter(p => p.category === selectedCategory)
+    if (priceMin)         list = list.filter(p => Number(p.price) >= Number(priceMin))
+    if (priceMax)         list = list.filter(p => Number(p.price) <= Number(priceMax))
     switch (sort) {
-      case 'price-asc':  list.sort((a, b) => a.price - b.price);         break
-      case 'price-desc': list.sort((a, b) => b.price - a.price);         break
+      case 'price-asc':  list.sort((a, b) => a.price - b.price); break
+      case 'price-desc': list.sort((a, b) => b.price - a.price); break
       case 'name-asc':   list.sort((a, b) => a.name.localeCompare(b.name)); break
       default: break
     }
-
     return list
-  }, [products, searchTerm, selectedCategory, sort])
-
-  const getCartQty = (id) => {
-    const item = cartItems.find(i => i.id === id)
-    return item ? item.quantity : 0
-  }
+  }, [products, searchTerm, selectedCategory, sort, priceMin, priceMax])
 
   const handleAddToCart = (product) => {
     addToCart(product)
@@ -82,104 +77,141 @@ export default function Products() {
   }
 
   const clearFilters = () => {
-    setSearchTerm('')
-    setSelectedCategory('')
-    setSort('default')
-    navigate('/products')
+    setSearchTerm(''); setSelectedCategory(''); setSort('default')
+    setPriceMin(''); setPriceMax(''); navigate('/products')
   }
 
-  const hasActiveFilters = searchTerm || selectedCategory || sort !== 'default'
+  const hasFilters = searchTerm || selectedCategory || sort !== 'default' || priceMin || priceMax
 
-  // ── Render ──────────────────────────────────────────────────────
   return (
-    <div className="page-content">
-      <div className="container">
+    <div className="page-content" style={{ background: '#f8fafc', minHeight: '100vh' }}>
 
-        {/* Page header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-          <div>
-            <h1 style={{ fontSize: 'clamp(1.5rem, 3vw, 2.25rem)', fontWeight: 900, letterSpacing: '-0.5px', marginBottom: '0.25rem' }}>
-              Our Products
-            </h1>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-              {loading ? 'Loading…' : `${filtered.length} product${filtered.length !== 1 ? 's' : ''} found`}
-            </p>
-          </div>
-          {user?.role === 'ROLE_ADMIN' && (
-            <a href="/admin" className="btn btn-outline btn-sm">⚙️ Manage Products</a>
-          )}
-        </div>
+      {/* ── Page Hero Banner ──────────────────────────────────────── */}
+      <div className="prd-banner">
+        <div className="prd-banner-orb prd-banner-orb-1" />
+        <div className="prd-banner-orb prd-banner-orb-2" />
+        <div className="prd-banner-inner">
+          <div className="prd-banner-eyebrow">🛍️ MyStore Catalogue</div>
+          <h1 className="prd-banner-title">Discover Amazing Products</h1>
+          <p className="prd-banner-sub">Browse {loading ? '…' : products.length}+ products across all categories</p>
 
-        {/* Search + sort bar */}
-        <div className="filters-panel">
-          <div className="filter-group" style={{ flex: '2', minWidth: '240px' }}>
-            <label>Search</label>
+          {/* Inline search */}
+          <div className="prd-search-bar">
+            <span className="prd-search-icon">🔍</span>
             <input
               type="text"
-              className="form-control"
-              placeholder="Search products…"
+              placeholder="Search products, brands, categories…"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
+              className="prd-search-input"
             />
+            {searchTerm && (
+              <button className="prd-search-clear" onClick={() => setSearchTerm('')}>✕</button>
+            )}
           </div>
-          <div className="filter-group">
-            <label>Sort By</label>
-            <select
-              className="form-control"
-              value={sort}
-              onChange={e => setSort(e.target.value)}
+        </div>
+      </div>
+
+      <div className="container" style={{ paddingTop: '2rem', paddingBottom: '4rem' }}>
+
+        {/* ── Toolbar ───────────────────────────────────────────── */}
+        <div className="prd-toolbar">
+          <div className="prd-count">
+            {loading
+              ? <span className="prd-count-loader">Loading products…</span>
+              : <><strong>{filtered.length}</strong> product{filtered.length !== 1 ? 's' : ''} found</>
+            }
+          </div>
+
+          <div className="prd-toolbar-right">
+            <button
+              className={`prd-filter-toggle ${showFilters ? 'prd-filter-toggle--active' : ''}`}
+              onClick={() => setShowFilters(v => !v)}
             >
-              {SORT_OPTIONS.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </div>
-          {hasActiveFilters && (
-            <button className="btn btn-ghost btn-sm" onClick={clearFilters} style={{ alignSelf: 'flex-end' }}>
-              ✕ Clear
+              ⚙️ Filters {showFilters ? '▲' : '▼'}
             </button>
-          )}
+
+            <div className="prd-sort-wrap">
+              <select
+                className="prd-sort-select"
+                value={sort}
+                onChange={e => setSort(e.target.value)}
+              >
+                {SORT_OPTIONS.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+
+            {user?.role === 'ROLE_ADMIN' && (
+              <a href="/admin" className="prd-admin-link">⚙️ Manage</a>
+            )}
+          </div>
         </div>
 
-        {/* Category pills */}
+        {/* ── Advanced Filters Panel ────────────────────────────── */}
+        {showFilters && (
+          <div className="prd-filters-panel">
+            <div className="prd-filter-item">
+              <label className="prd-filter-label">Min Price (₹)</label>
+              <input type="number" className="prd-filter-input" placeholder="0"
+                     value={priceMin} onChange={e => setPriceMin(e.target.value)} min="0" />
+            </div>
+            <div className="prd-filter-item">
+              <label className="prd-filter-label">Max Price (₹)</label>
+              <input type="number" className="prd-filter-input" placeholder="999999"
+                     value={priceMax} onChange={e => setPriceMax(e.target.value)} min="0" />
+            </div>
+            {hasFilters && (
+              <button className="prd-clear-btn" onClick={clearFilters}>✕ Clear All</button>
+            )}
+          </div>
+        )}
+
+        {/* ── Category Pills ────────────────────────────────────── */}
         {categories.length > 0 && (
-          <div className="category-pills">
+          <div className="prd-cats">
             <button
-              className={`category-pill${!selectedCategory ? ' active' : ''}`}
+              className={`prd-cat-pill ${!selectedCategory ? 'prd-cat-pill--active' : ''}`}
               onClick={() => setSelectedCategory('')}
             >
-              All
+              🏪 All
             </button>
             {categories.map(cat => (
               <button
                 key={cat}
-                className={`category-pill${selectedCategory === cat ? ' active' : ''}`}
+                className={`prd-cat-pill ${selectedCategory === cat ? 'prd-cat-pill--active' : ''}`}
                 onClick={() => setSelectedCategory(selectedCategory === cat ? '' : cat)}
               >
-                {cat}
+                {CATEGORY_ICONS[cat] || '📦'} {cat}
               </button>
             ))}
           </div>
         )}
 
-        {/* Active filter tags */}
-        {hasActiveFilters && (
-          <div className="active-filters">
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Active:</span>
+        {/* ── Active Filter Tags ────────────────────────────────── */}
+        {hasFilters && (
+          <div className="prd-active-tags">
+            <span className="prd-active-label">Active filters:</span>
             {searchTerm && (
-              <span className="filter-tag">
-                Search: "{searchTerm}"
-                <button onClick={() => setSearchTerm('')}>×</button>
+              <span className="prd-tag">
+                🔍 "{searchTerm}" <button onClick={() => setSearchTerm('')}>×</button>
               </span>
             )}
             {selectedCategory && (
-              <span className="filter-tag">
-                {selectedCategory}
+              <span className="prd-tag">
+                {CATEGORY_ICONS[selectedCategory]} {selectedCategory}
                 <button onClick={() => setSelectedCategory('')}>×</button>
               </span>
             )}
+            {(priceMin || priceMax) && (
+              <span className="prd-tag">
+                ₹{priceMin||'0'} – ₹{priceMax||'∞'}
+                <button onClick={() => { setPriceMin(''); setPriceMax('') }}>×</button>
+              </span>
+            )}
             {sort !== 'default' && (
-              <span className="filter-tag">
+              <span className="prd-tag">
                 {SORT_OPTIONS.find(o => o.value === sort)?.label}
                 <button onClick={() => setSort('default')}>×</button>
               </span>
@@ -187,28 +219,25 @@ export default function Products() {
           </div>
         )}
 
-        {/* Error state */}
+        {/* ── States ───────────────────────────────────────────── */}
         {error && !loading && (
-          <div className="empty-state">
-            <div className="empty-state__icon">⚠️</div>
+          <div className="prd-empty">
+            <div className="prd-empty-icon">⚠️</div>
             <h2>Failed to Load Products</h2>
             <p>{error}</p>
             <button className="btn btn-primary" onClick={refetch}>Try Again</button>
           </div>
         )}
 
-        {/* Skeleton loader */}
         {loading && <SkeletonGrid count={8} />}
 
-        {/* Empty state */}
         {!loading && !error && filtered.length === 0 && (
-          <div className="empty-state">
-            <div className="empty-state__icon">🔍</div>
+          <div className="prd-empty">
+            <div className="prd-empty-icon">🔍</div>
             <h2>{products.length === 0 ? 'No Products Yet' : 'No Results Found'}</h2>
-            <p>
-              {products.length === 0
-                ? 'Products will appear here once they are added.'
-                : 'Try adjusting your search or clearing your filters.'}
+            <p>{products.length === 0
+              ? 'Products will appear here once they are added.'
+              : 'Try adjusting your search or clearing your filters.'}
             </p>
             {products.length > 0 && (
               <button className="btn btn-primary" onClick={clearFilters}>Clear Filters</button>
@@ -216,7 +245,6 @@ export default function Products() {
           </div>
         )}
 
-        {/* Products grid */}
         {!loading && !error && filtered.length > 0 && (
           <div className="products-grid">
             {filtered.map(product => (
@@ -224,7 +252,7 @@ export default function Products() {
                 key={product.id}
                 product={product}
                 onAddToCart={handleAddToCart}
-                cartQuantity={getCartQty(product.id)}
+                cartQuantity={cartItems.find(i => i.id === product.id)?.quantity || 0}
               />
             ))}
           </div>

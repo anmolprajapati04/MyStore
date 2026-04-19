@@ -34,9 +34,10 @@ public class OrderController {
     }
 
     @GetMapping("/user/{userId}")
-    public List<Order> getOrdersByUserId(@PathVariable Long userId) {
+    public List<Order> getOrdersByUserId(@PathVariable String userId) {
         return orderRepository.findByUserId(userId);
     }
+
 
     @PostMapping
     public ResponseEntity<Order> createOrder(@Valid @RequestBody OrderRequest orderRequest) {
