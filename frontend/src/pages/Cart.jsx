@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext'
 import { useToast } from '../components/Toast'
 import { handleImageError, FALLBACK_IMAGE_URI } from '../utils/imageUtils'
+import { formatINR } from '../utils/currencyUtils'
 
 export default function Cart() {
   const { user } = useAuth()
@@ -11,7 +12,7 @@ export default function Cart() {
   const toast = useToast()
   const navigate = useNavigate()
 
-  const shipping = cartTotal > 0 ? 5.00 : 0
+  const shipping = cartTotal > 0 ? 99.00 : 0
   const total    = cartTotal + shipping
 
   const handleRemove = (item) => {
@@ -64,7 +65,7 @@ export default function Cart() {
                 <div className="cart-item__info">
                   <div className="cart-item__name">{item.name}</div>
                   {item.category && <div className="cart-item__cat">{item.category}</div>}
-                  <div className="cart-item__price">${Number(item.price).toFixed(2)}</div>
+                  <div className="cart-item__price">{formatINR(item.price)}</div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.75rem' }}>
                   <div className="qty-stepper">
@@ -73,7 +74,7 @@ export default function Cart() {
                     <button onClick={() => updateQuantity(item.id, item.quantity + 1)}>+</button>
                   </div>
                   <div style={{ fontWeight: 800, fontSize: '1.05rem', color: 'var(--text-primary)' }}>
-                    ${(item.price * item.quantity).toFixed(2)}
+                    {formatINR(item.price * item.quantity)}
                   </div>
                   <button
                     onClick={() => handleRemove(item)}
@@ -101,7 +102,7 @@ export default function Cart() {
                   {item.name} × {item.quantity}
                 </span>
                 <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>
-                  ${(item.price * item.quantity).toFixed(2)}
+                  {formatINR(item.price * item.quantity)}
                 </span>
               </div>
             ))}
@@ -109,15 +110,15 @@ export default function Cart() {
             <div style={{ marginTop: '1rem' }}>
               <div className="summary-row">
                 <span>Subtotal</span>
-                <span>${cartTotal.toFixed(2)}</span>
+                <span>{formatINR(cartTotal)}</span>
               </div>
               <div className="summary-row">
                 <span>Delivery</span>
-                <span>${shipping.toFixed(2)}</span>
+                <span>{formatINR(shipping)}</span>
               </div>
               <div className="summary-row total">
                 <span>Total</span>
-                <span>${total.toFixed(2)}</span>
+                <span>{formatINR(total)}</span>
               </div>
             </div>
 

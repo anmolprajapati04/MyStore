@@ -4,8 +4,10 @@ import { useAuth } from '../context/AuthContext'
 import { useCart } from '../context/CartContext'
 import { useToast } from '../components/Toast'
 import { useProducts } from '../hooks/useProducts'
+import axios from 'axios'
 import { ProductCard } from '../components/ProductCard'
 import { SkeletonGrid } from '../components/SkeletonCard'
+import { formatINR } from '../utils/currencyUtils'
 
 const SORT_OPTIONS = [
   { value: 'default',    label: '✨ Featured' },
@@ -36,6 +38,7 @@ export default function Products() {
   const [priceMin,         setPriceMin]         = useState('')
   const [priceMax,         setPriceMax]         = useState('')
   const [showFilters,      setShowFilters]      = useState(false)
+  const [wishlistIds,      setWishlistIds]      = useState([])
 
   const { products, loading, error, refetch } = useProducts()
 
@@ -43,6 +46,43 @@ export default function Products() {
     setSearchTerm(urlQuery)
     setSelectedCategory(urlCategory)
   }, [urlQuery, urlCategory])
+
+  useEffect(() => {
+    if (user) fetchWishlistIds()
+    else setWishlistIds([])
+  }, [user])
+
+  const fetchWishlistIds = async () => {
+    try {
+      const res = await axios.get('/api/products/wishlist')
+      setWishlistIds(res.data.map(item => item.product.id))
+    } catch (err) {
+      console.error('Failed to fetch wishlist', err)
+    }
+  }
+
+  const handleToggleWishlist = async (product) => {
+    if (!user) {
+      navigate('/login')
+      toast.info('Please login to use wishlist')
+      return
+    }
+
+    const isWishlisted = wishlistIds.includes(product.id)
+    try {
+      if (isWishlisted) {
+        await axios.delete(`/api/products/wishlist/${product.id}`)
+        setWishlistIds(prev => prev.filter(id => id !== product.id))
+        toast.success('Removed from wishlist')
+      } else {
+        await axios.post(`/api/products/wishlist/${product.id}`)
+        setWishlistIds(prev => [...prev, product.id])
+        toast.success('Added to wishlist')
+      }
+    } catch (err) {
+      toast.error('Failed to update wishlist')
+    }
+  }
 
   const categories = useMemo(
     () => [...new Set(products.map(p => p.category).filter(Boolean))],
@@ -159,7 +199,7 @@ export default function Products() {
             </div>
             <div className="prd-filter-item">
               <label className="prd-filter-label">Max Price (₹)</label>
-              <input type="number" className="prd-filter-input" placeholder="999999"
+              <input type="number" className="prd-filter-input" placeholder="100000"
                      value={priceMax} onChange={e => setPriceMax(e.target.value)} min="0" />
             </div>
             {hasFilters && (
@@ -206,7 +246,7 @@ export default function Products() {
             )}
             {(priceMin || priceMax) && (
               <span className="prd-tag">
-                ₹{priceMin||'0'} – ₹{priceMax||'∞'}
+                {formatINR(priceMin||0)} – {formatINR(priceMax||'∞')}
                 <button onClick={() => { setPriceMin(''); setPriceMax('') }}>×</button>
               </span>
             )}
@@ -250,7 +290,11 @@ export default function Products() {
             {filtered.map(product => (
               <ProductCard
                 key={product.id}
-                product={product}
+                product={{
+                  ...product,
+                  isWishlisted: wishlistIds.includes(product.id),
+                  onToggleWishlist: handleToggleWishlist
+                }}
                 onAddToCart={handleAddToCart}
                 cartQuantity={cartItems.find(i => i.id === product.id)?.quantity || 0}
               />

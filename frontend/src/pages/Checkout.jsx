@@ -5,8 +5,22 @@ import { useCart } from '../context/CartContext'
 import { useToast } from '../components/Toast'
 import { handleImageError, FALLBACK_IMAGE_URI } from '../utils/imageUtils'
 import axios from 'axios'
+import { formatINR } from '../utils/currencyUtils'
 
 const STEPS = ['Shipping', 'Payment', 'Review']
+
+const loadRazorpayScript = () => new Promise(resolve => {
+  if (window.Razorpay) {
+    resolve(true)
+    return
+  }
+
+  const script = document.createElement('script')
+  script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+  script.onload = () => resolve(true)
+  script.onerror = () => resolve(false)
+  document.body.appendChild(script)
+})
 
 function Stepper({ current }) {
   return (
@@ -42,7 +56,7 @@ export default function Checkout() {
     customerName: user?.username || '',
     street: '', city: '', state: '', zipCode: '', country: 'India',
   })
-  const [payment, setPayment] = useState({ method: 'CREDIT_CARD' })
+  const [payment, setPayment] = useState({ method: 'CARD' })
 
   useEffect(() => {
     if (!user) { navigate('/login'); return }
@@ -52,15 +66,14 @@ export default function Checkout() {
   const handleShippingChange = e =>
     setShipping(s => ({ ...s, [e.target.name]: e.target.value }))
 
-  const shippingFee = 5.00
+  const shippingFee = 99.00
   const grandTotal  = cartTotal + shippingFee
 
   const placeOrder = async () => {
     setLoading(true)
     try {
-      const token = localStorage.getItem('token')
       const orderData = {
-        userId:         user.username,   // use username as userId string
+        userId:         user.username,
         customerName:   shipping.customerName,
         customerEmail:  user.email || `${user.username}@mystore.com`,
         paymentMethod:  payment.method,
@@ -76,17 +89,78 @@ export default function Checkout() {
           quantity:  item.quantity,
         })),
       }
-      await axios.post('/api/orders', orderData, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      const idempotencyKey = sessionStorage.getItem('checkoutIdempotencyKey') || crypto.randomUUID()
+      sessionStorage.setItem('checkoutIdempotencyKey', idempotencyKey)
+
+      const paymentOrder = await axios.post('/api/payment/create-order', {
+        idempotencyKey,
+        order: orderData,
       })
-      clearCart()
-      toast.success('🎉 Order placed successfully!')
-      navigate('/orders')
+
+      if (paymentOrder.data.razorpayOrderId?.startsWith('order_mock_') || paymentOrder.data.razorpayOrderId?.startsWith('cod_')) {
+        const verified = await axios.post('/api/payment/verify', {
+          razorpayOrderId: paymentOrder.data.razorpayOrderId,
+          razorpayPaymentId: paymentOrder.data.razorpayOrderId?.startsWith('cod_') ? `cod_pay_${Date.now()}` : `pay_mock_${Date.now()}`,
+          razorpaySignature: 'mock-signature',
+        })
+        if (verified.data.paymentStatus !== 'SUCCESS') throw new Error('Order verification failed')
+        clearCart()
+        sessionStorage.removeItem('checkoutIdempotencyKey')
+        navigate('/payment-success', { state: { order: verified.data.order, paymentId: 'COD' } })
+        return
+      }
+
+      const scriptLoaded = await loadRazorpayScript()
+      if (!scriptLoaded) throw new Error('Unable to load Razorpay checkout. Please try again.')
+      
+      const razorpay = new window.Razorpay({
+        key: paymentOrder.data.keyId,
+        amount: paymentOrder.data.amountInPaise,
+        currency: paymentOrder.data.currency,
+        name: 'MyStore',
+        description: 'Secure checkout',
+        order_id: paymentOrder.data.razorpayOrderId,
+        prefill: {
+          name: shipping.customerName,
+          email: user.email || `${user.username}@mystore.com`,
+        },
+        theme: { color: '#111827' },
+        modal: {
+          ondismiss: () => setLoading(false),
+        },
+        handler: async response => {
+          try {
+            const verified = await axios.post('/api/payment/verify', {
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature,
+            })
+            if (verified.data.paymentStatus !== 'SUCCESS') throw new Error(verified.data.message || 'Payment verification failed')
+            clearCart()
+            sessionStorage.removeItem('checkoutIdempotencyKey')
+            navigate('/payment-success', { state: { order: verified.data.order, paymentId: response.razorpay_payment_id } })
+          } catch (verifyError) {
+            navigate('/payment-failure', { state: { error: verifyError.response?.data?.message || verifyError.message } })
+          } finally {
+            setLoading(false)
+          }
+        },
+      })
+
+      razorpay.on('payment.failed', async response => {
+        await axios.post('/api/payment/failure', {
+          razorpayOrderId: response.error?.metadata?.order_id || paymentOrder.data.razorpayOrderId,
+          reason: response.error?.description || 'Payment failed',
+        })
+        navigate('/payment-failure', { state: { error: response.error?.description || 'Payment failed' } })
+        setLoading(false)
+      })
+
+      razorpay.open()
     } catch (err) {
-      console.error('Order failed:', err)
+      console.error('Payment failed:', err)
       const msg = err.response?.data?.message || err.response?.data || err.message || 'Failed to place order'
-      toast.error(`Order failed: ${msg}`)
-    } finally {
+      toast.error(`Payment failed: ${msg}`)
       setLoading(false)
     }
   }
@@ -109,14 +183,14 @@ export default function Checkout() {
               <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Qty: {item.quantity}</div>
             </div>
             <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)', flexShrink: 0 }}>
-              ${(item.price * item.quantity).toFixed(2)}
+              {formatINR(item.price * item.quantity)}
             </div>
           </div>
         ))}
       </div>
-      <div className="summary-row"><span>Subtotal</span><span>${cartTotal.toFixed(2)}</span></div>
-      <div className="summary-row"><span>Delivery</span><span>${shippingFee.toFixed(2)}</span></div>
-      <div className="summary-row total"><span>Total</span><span>${grandTotal.toFixed(2)}</span></div>
+      <div className="summary-row"><span>Subtotal</span><span>{formatINR(cartTotal)}</span></div>
+      <div className="summary-row"><span>Delivery</span><span>{formatINR(shippingFee)}</span></div>
+      <div className="summary-row total"><span>Total</span><span>{formatINR(grandTotal)}</span></div>
     </div>
   )
 
@@ -189,10 +263,8 @@ export default function Checkout() {
             <div className="card" style={{ padding: '2rem' }}>
               <h2 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: '1.5rem' }}>Payment Method</h2>
               {[
-                { value: 'CREDIT_CARD', label: '💳 Credit Card' },
-                { value: 'DEBIT_CARD',  label: '💳 Debit Card' },
-                { value: 'PAYPAL',      label: '🅿️ PayPal' },
-                { value: 'COD',         label: '💵 Cash on Delivery' },
+                { value: 'CARD',        label: 'Card / Net Banking / UPI' },
+                { value: 'COD',         label: 'Cash on Delivery' },
               ].map(opt => (
                 <label key={opt.value} style={{
                   display: 'flex', alignItems: 'center', gap: '1rem',
@@ -238,7 +310,7 @@ export default function Checkout() {
               <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius)', padding: '1.25rem', marginBottom: '1.5rem' }}>
                 <div style={{ fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Payment</div>
                 <div style={{ fontWeight: 600 }}>
-                  {{ CREDIT_CARD: '💳 Credit Card', DEBIT_CARD: '💳 Debit Card', PAYPAL: '🅿️ PayPal', COD: '💵 Cash on Delivery' }[payment.method]}
+                  {{ CARD: 'Card', UPI: 'UPI', NETBANKING: 'Net banking', WALLET: 'Wallet' }[payment.method]}
                 </div>
               </div>
 
@@ -250,7 +322,7 @@ export default function Checkout() {
                   onClick={placeOrder}
                   disabled={loading}
                 >
-                  {loading ? '⏳ Placing Order…' : `✓ Place Order — $${grandTotal.toFixed(2)}`}
+                  {loading ? '⏳ Placing Order…' : `✓ Place Order — ${formatINR(grandTotal)}`}
                 </button>
               </div>
             </div>

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useToast } from '../components/Toast'
 import axios from 'axios'
+import { formatINR } from '../utils/currencyUtils'
 
 const STATUS_CONFIG = {
   PENDING:   { label: 'Pending',   icon: '⏳', cls: 'status-PENDING'   },
@@ -38,6 +39,7 @@ export default function Orders() {
   const toast      = useToast()
   const navigate   = useNavigate()
   const [orders, setOrders]   = useState([])
+  const [payments, setPayments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
   const hasFetched = useRef(false)
@@ -47,7 +49,35 @@ export default function Orders() {
     if (hasFetched.current) return
     hasFetched.current = true
     fetchOrders()
-  }, [user])
+    fetchPayments()
+  }, [user, navigate])
+
+  useEffect(() => {
+    if (!user) return
+    const token = localStorage.getItem('token')
+    if (!token) return
+
+    const source = new EventSource(`/api/order-events/stream?userId=${encodeURIComponent(user.username)}&token=${encodeURIComponent(token)}`)
+
+    source.addEventListener('order_created', event => {
+      const order = JSON.parse(event.data)
+      setOrders(current => current.some(item => item.id === order.id) ? current : [order, ...current])
+    })
+
+    source.addEventListener('order_status_updated', event => {
+      const order = JSON.parse(event.data)
+      setOrders(current => current.map(item => item.id === order.id ? order : item))
+      toast.info(`Order #${order.id} is now ${order.status}`)
+    })
+
+    source.addEventListener('payment_success', event => {
+      const payment = JSON.parse(event.data)
+      toast.success(`Payment confirmed for order #${payment.orderId}`)
+      fetchPayments()
+    })
+
+    return () => source.close()
+  }, [user, toast])
 
   const fetchOrders = async () => {
     try {
@@ -55,7 +85,6 @@ export default function Orders() {
       setError(null)
       const token = localStorage.getItem('token')
       const headers = token ? { Authorization: `Bearer ${token}` } : {}
-      // Fetch by username (stored as userId in our order service)
       const res = await axios.get(`/api/orders/user/${user.username}`, { headers })
       setOrders(Array.isArray(res.data) ? res.data : [])
     } catch (err) {
@@ -66,9 +95,21 @@ export default function Orders() {
     }
   }
 
+  const fetchPayments = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const headers = token ? { Authorization: `Bearer ${token}` } : {}
+      const res = await axios.get(`/api/payment/user/${user.username}`, { headers })
+      setPayments(Array.isArray(res.data) ? res.data : [])
+    } catch (err) {
+      console.error('Payments fetch failed:', err)
+    }
+  }
+
+  const paymentForOrder = (orderId) => payments.find(payment => payment.orderId === orderId)
+
   if (!user) return null
 
-  // ── Skeleton state ──────────────────────────────────────────────
   if (loading) {
     return (
       <div className="page-content">
@@ -82,7 +123,6 @@ export default function Orders() {
     )
   }
 
-  // ── Error state ─────────────────────────────────────────────────
   if (error) {
     return (
       <div className="page-content">
@@ -100,7 +140,6 @@ export default function Orders() {
     )
   }
 
-  // ── Empty state ─────────────────────────────────────────────────
   if (orders.length === 0) {
     return (
       <div className="page-content">
@@ -116,7 +155,6 @@ export default function Orders() {
     )
   }
 
-  // ── Orders list ─────────────────────────────────────────────────
   return (
     <div className="page-content">
       <div className="container">
@@ -137,6 +175,9 @@ export default function Orders() {
           {orders.map((order, idx) => {
             const cfg    = STATUS_CONFIG[order.status] || STATUS_CONFIG.PENDING
             const date   = order.orderDate ? new Date(order.orderDate) : null
+            const payment = paymentForOrder(order.id)
+            const timeline = ['PENDING', 'CONFIRMED', 'SHIPPED', 'DELIVERED']
+            const currentStatusIndex = timeline.indexOf(order.status)
             return (
               <div key={order.id} className="order-card animate-fade-up" style={{ animationDelay: `${idx * 0.05}s` }}>
 
@@ -163,12 +204,27 @@ export default function Orders() {
                       {cfg.icon} {cfg.label}
                     </span>
                     <div style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--primary)' }}>
-                      ${order.totalAmount?.toFixed(2) ?? '—'}
+                      {order.totalAmount ? formatINR(order.totalAmount) : '—'}
                     </div>
                     <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
                       via {order.paymentMethod?.replace(/_/g, ' ')}
                     </div>
+                    {payment && (
+                      <span className={`status-badge ${payment.status === 'SUCCESS' ? 'status-DELIVERED' : payment.status === 'FAILED' ? 'status-CANCELLED' : 'status-PENDING'}`}>
+                        Payment {payment.status}
+                      </span>
+                    )}
                   </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem', margin: '1rem 0' }}>
+                  {['Ordered', 'Confirmed', 'Shipped', 'Delivered'].map((label, statusIndex) => (
+                    <div key={label} style={{
+                      height: 6,
+                      borderRadius: 999,
+                      background: statusIndex <= Math.max(currentStatusIndex, 0) ? 'var(--primary)' : 'var(--border)',
+                    }} title={label} />
+                  ))}
                 </div>
 
                 {/* Items */}
@@ -183,7 +239,7 @@ export default function Orders() {
                         <span style={{ color: 'var(--text-muted)', fontSize: '0.825rem', marginLeft: '0.5rem' }}>× {item.quantity}</span>
                       </div>
                       <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
-                        ${item.subtotal?.toFixed(2)}
+                        {formatINR(item.subtotal)}
                       </span>
                     </div>
                   ))}

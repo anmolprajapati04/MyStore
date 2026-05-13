@@ -21,6 +21,9 @@ public class OrderService {
     @Autowired
     private ProductClient productClient;
 
+    @Autowired
+    private OrderEventService orderEventService;
+
     public Order createOrder(OrderRequest orderRequest) {
         Order order = new Order();
         order.setUserId(orderRequest.getUserId());
@@ -58,6 +61,8 @@ public class OrderService {
         }
 
         order.setTotalAmount(totalAmount);
-        return orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
+        orderEventService.publishOrderCreated(savedOrder);
+        return savedOrder;
     }
 }

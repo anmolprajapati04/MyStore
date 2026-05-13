@@ -159,6 +159,23 @@ public class ProductController {
         return ResponseEntity.notFound().build();
     }
 
+    @PutMapping("/{id}/stock/decrement")
+    public ResponseEntity<?> decrementStock(@PathVariable Long id, @RequestParam Integer quantity) {
+        Optional<Product> product = productRepository.findById(id);
+        if (product.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        Product existingProduct = product.get();
+        if (quantity == null || quantity <= 0 || existingProduct.getStockQuantity() < quantity) {
+            return ResponseEntity.badRequest().body("Insufficient stock");
+        }
+
+        existingProduct.setStockQuantity(existingProduct.getStockQuantity() - quantity);
+        productRepository.save(existingProduct);
+        return ResponseEntity.ok().build();
+    }
+
     // Get products by category
     @GetMapping("/category/{category}")
     public List<Product> getProductsByCategory(@PathVariable String category) {

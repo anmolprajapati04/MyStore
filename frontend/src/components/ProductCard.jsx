@@ -1,5 +1,6 @@
 import React from 'react'
 import { getImageUrl, handleImageError, FALLBACK_IMAGE_URI } from '../utils/imageUtils'
+import { formatINR } from '../utils/currencyUtils'
 
 /**
  * Star rating display (static, based on a pseudo-random seed from product id)
@@ -45,6 +46,19 @@ export function ProductCard({ product, onAddToCart, cartQuantity = 0 }) {
           onError={handleImageError}
           loading="lazy"
         />
+        
+        {/* Wishlist Heart Icon */}
+        <button 
+          className={`wishlist-btn ${product.isWishlisted ? 'active' : ''}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            product.onToggleWishlist(product);
+          }}
+          aria-label={product.isWishlisted ? "Remove from wishlist" : "Add to wishlist"}
+        >
+          {product.isWishlisted ? '❤️' : '🤍'}
+        </button>
+
         {/* Overlay quick-add */}
         {!isOutOfStock && (
           <div className="product-card__overlay">
@@ -80,7 +94,7 @@ export function ProductCard({ product, onAddToCart, cartQuantity = 0 }) {
         <div className="product-card__footer">
           <div className="product-card__price">
             <span className="product-card__price-current">
-              ${Number(product.price).toFixed(2)}
+              {formatINR(product.price)}
             </span>
           </div>
           <button

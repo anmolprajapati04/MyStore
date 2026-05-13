@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import Header from './components/Header'
+import ProtectedRoute from './components/ProtectedRoute'
 import { AuthProvider } from './context/AuthContext'
 import { CartProvider } from './context/CartContext'
 import { ToastProvider } from './components/Toast'
@@ -16,6 +17,10 @@ const Cart     = lazy(() => import('./pages/Cart'))
 const Checkout = lazy(() => import('./pages/Checkout'))
 const Orders   = lazy(() => import('./pages/Orders'))
 const Admin    = lazy(() => import('./pages/Admin'))
+const PaymentSuccess = lazy(() => import('./pages/PaymentSuccess'))
+const PaymentFailure = lazy(() => import('./pages/PaymentFailure'))
+const Wishlist = lazy(() => import('./pages/Wishlist'))
+
 
 function PageLoader() {
   return (
@@ -53,9 +58,16 @@ function App() {
                       <Route path="/register" element={<Register />} />
                       <Route path="/products" element={<Products />} />
                       <Route path="/cart"     element={<Cart />} />
-                      <Route path="/checkout" element={<Checkout />} />
-                      <Route path="/orders"   element={<Orders />} />
-                      <Route path="/admin"    element={<Admin />} />
+                      <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
+                      <Route path="/orders"   element={<ProtectedRoute><Orders /></ProtectedRoute>} />
+                      <Route path="/payment-success" element={<ProtectedRoute><PaymentSuccess /></ProtectedRoute>} />
+                      <Route path="/payment-failure" element={<ProtectedRoute><PaymentFailure /></ProtectedRoute>} />
+                      <Route path="/wishlist" element={<ProtectedRoute><Wishlist /></ProtectedRoute>} />
+                      <Route path="/admin"    element={
+                        <ProtectedRoute roles={['ROLE_ADMIN', 'ROLE_SUPER_ADMIN']}>
+                          <Admin />
+                        </ProtectedRoute>
+                      } />
                     </Routes>
                   </Suspense>
                 </main>

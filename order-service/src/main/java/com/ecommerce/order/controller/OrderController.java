@@ -2,7 +2,9 @@ package com.ecommerce.order.controller;
 
 import com.ecommerce.order.dto.OrderRequest;
 import com.ecommerce.order.model.Order;
+import com.ecommerce.order.model.OrderStatus;
 import com.ecommerce.order.repository.OrderRepository;
+import com.ecommerce.order.service.OrderEventService;
 import com.ecommerce.order.service.OrderService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +23,9 @@ public class OrderController {
 
     @Autowired
     private OrderService orderService;
+
+    @Autowired
+    private OrderEventService orderEventService;
 
     @GetMapping
     public List<Order> getAllOrders() {
@@ -58,8 +63,10 @@ public class OrderController {
         Optional<Order> order = orderRepository.findById(id);
         if (order.isPresent()) {
             Order existingOrder = order.get();
-            // Update status logic here
-            return ResponseEntity.ok(orderRepository.save(existingOrder));
+            existingOrder.setStatus(OrderStatus.valueOf(status.toUpperCase()));
+            Order savedOrder = orderRepository.save(existingOrder);
+            orderEventService.publishOrderStatusUpdated(savedOrder);
+            return ResponseEntity.ok(savedOrder);
         }
         return ResponseEntity.notFound().build();
     }

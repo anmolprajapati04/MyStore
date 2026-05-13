@@ -37,6 +37,16 @@ spring:
                 name: order-service
                 fallbackUri: forward:/fallback/order
 
+        - id: order-events
+          uri: lb://order-service
+          predicates:
+            - Path=/api/order-events/**
+
+        - id: payment-service
+          uri: lb://order-service
+          predicates:
+            - Path=/api/payment/**
+
 eureka:
   client:
     service-url:
@@ -60,3 +70,6 @@ resilience4j:
         sliding-window-size: 10
         failure-rate-threshold: 50
         wait-duration-in-open-state: 10s
+
+jwt:
+  secret: ${JWT_SECRET:mySecretKey123456789012345678901234567890}
