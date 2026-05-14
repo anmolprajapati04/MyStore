@@ -66,13 +66,13 @@ export default function Login() {
 
           <form onSubmit={handleSubmit} noValidate className="auth2-form">
             <div className="auth2-field">
-              <label className="auth2-label">Username</label>
+              <label className="auth2-label">Username or Email</label>
               <div className="auth2-input-wrap">
                 <span className="auth2-input-icon">👤</span>
                 <input
                   type="text" name="username"
                   className="auth2-input"
-                  placeholder="Enter your username"
+                  placeholder="Enter username or email"
                   value={form.username}
                   onChange={handleChange}
                   required autoFocus autoComplete="username"

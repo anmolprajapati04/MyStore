@@ -88,8 +88,12 @@ export default function Orders() {
       const res = await axios.get(`/api/orders/user/${user.username}`, { headers })
       setOrders(Array.isArray(res.data) ? res.data : [])
     } catch (err) {
-      console.error('Orders fetch failed:', err)
-      setError('Failed to load orders. Please try again.')
+      if (err.response?.status === 404) {
+        setOrders([])
+      } else {
+        console.error('Orders fetch failed:', err)
+        setError('Failed to load orders. Please try again.')
+      }
     } finally {
       setLoading(false)
     }

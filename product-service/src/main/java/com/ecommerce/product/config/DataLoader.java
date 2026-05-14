@@ -14,9 +14,10 @@ import java.util.List;
 public class DataLoader {
 
     @Bean
-    CommandLineRunner initDatabase(ProductRepository repository) {
+    CommandLineRunner initDatabase(ProductRepository repository, com.ecommerce.product.repository.WishlistRepository wishlistRepository) {
         return args -> {
             if (repository.count() > 0) {
+                wishlistRepository.deleteAll();
                 repository.deleteAll();
             }
 

@@ -4,6 +4,7 @@ import com.ecommerce.product.model.Product;
 import com.ecommerce.product.model.Wishlist;
 import com.ecommerce.product.repository.ProductRepository;
 import com.ecommerce.product.repository.WishlistRepository;
+import com.ecommerce.product.service.ImageStorageService;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -19,13 +20,23 @@ public class WishlistController {
 
     @Autowired
     private WishlistRepository wishlistRepository;
+    
+    @Autowired
+    private ImageStorageService imageStorageService;
 
     @Autowired
     private ProductRepository productRepository;
 
     @GetMapping
     public List<Wishlist> getWishlist(@RequestHeader("X-Authenticated-User") String userId) {
-        return wishlistRepository.findByUserId(userId);
+        List<Wishlist> items = wishlistRepository.findByUserId(userId);
+        items.forEach(item -> {
+            Product p = item.getProduct();
+            if (p != null && p.getImageName() != null) {
+                p.setImagePath(imageStorageService.getImageUrl(p.getImageName()));
+            }
+        });
+        return items;
     }
 
     @PostMapping("/{productId}")

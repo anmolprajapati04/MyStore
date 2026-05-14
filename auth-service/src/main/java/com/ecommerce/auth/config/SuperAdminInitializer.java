@@ -20,17 +20,27 @@ public class SuperAdminInitializer {
             @Value("${app.super-admin.email:admin@mystore.com}") String email,
             @Value("${app.super-admin.password:Admin@123}") String password) {
         return args -> {
-            if (userRepository.existsByRole(Role.ROLE_SUPER_ADMIN)) {
-                return;
+            // 1. Try finding by the target email (highest priority for identity)
+            User superAdmin = userRepository.findByEmail(email).orElse(null);
+            
+            // 2. If not found, try finding by the target username
+            if (superAdmin == null) {
+                superAdmin = userRepository.findByUsername(username).orElse(null);
+            }
+            
+            // 3. If still not found, try finding any existing Super Admin by role
+            if (superAdmin == null) {
+                superAdmin = userRepository.findByRole(Role.ROLE_SUPER_ADMIN).orElse(new User());
             }
 
-            if (userRepository.existsByUsername(username) || userRepository.existsByEmail(email)) {
-                System.out.println("Warning: Default super admin username/email already taken. Skipping auto-initialization.");
-                return;
-            }
-
-            User superAdmin = new User(username, passwordEncoder.encode(password), email, Role.ROLE_SUPER_ADMIN);
+            // Always enforce configured credentials and role
+            superAdmin.setUsername(username);
+            superAdmin.setEmail(email);
+            superAdmin.setPassword(passwordEncoder.encode(password));
+            superAdmin.setRole(Role.ROLE_SUPER_ADMIN);
+            
             userRepository.save(superAdmin);
+            System.out.println("Super Admin identity synchronized: " + email);
         };
     }
 }

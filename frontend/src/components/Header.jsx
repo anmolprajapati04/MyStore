@@ -41,9 +41,12 @@ export default function Header() {
             <Link to="/" className={`nav-link${isActive('/') ? ' nav-link--active' : ''}`}>Home</Link>
             <Link to="/products" className={`nav-link${isActive('/products') ? ' nav-link--active' : ''}`}>Products</Link>
             {user && (
-              <Link to="/orders" className={`nav-link${isActive('/orders') ? ' nav-link--active' : ''}`}>My Orders</Link>
+              <>
+                <Link to="/orders" className={`nav-link${isActive('/orders') ? ' nav-link--active' : ''}`}>My Orders</Link>
+                <Link to="/wishlist" className={`nav-link${isActive('/wishlist') ? ' nav-link--active' : ''}`}>Wishlist</Link>
+              </>
             )}
-            {user?.role === 'ROLE_ADMIN' && (
+            {user && (user.role === 'ROLE_ADMIN' || user.role === 'ROLE_SUPER_ADMIN') && (
               <Link to="/admin" className={`nav-link${isActive('/admin') ? ' nav-link--active' : ''}`}>Admin</Link>
             )}
           </nav>
@@ -111,8 +114,9 @@ export default function Header() {
               {user ? (
                 <>
                   <Link to="/cart">🛍️ Cart {cartCount > 0 && `(${cartCount})`}</Link>
+                  <Link to="/wishlist">💖 Wishlist</Link>
                   <Link to="/orders">📦 My Orders</Link>
-                  {user.role === 'ROLE_ADMIN' && <Link to="/admin">⚙️ Admin</Link>}
+                  {user && (user.role === 'ROLE_ADMIN' || user.role === 'ROLE_SUPER_ADMIN') && <Link to="/admin">⚙️ Admin</Link>}
                   <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem', marginTop: '0.5rem' }}>
                     <button onClick={handleLogout} className="nav-drawer__logout">
                       Sign Out

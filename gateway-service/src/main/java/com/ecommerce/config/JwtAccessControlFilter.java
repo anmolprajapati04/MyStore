@@ -85,7 +85,7 @@ public class JwtAccessControlFilter implements GlobalFilter, Ordered {
     private boolean isPublic(String path, HttpMethod method) {
         return path.startsWith("/api/auth/signin")
                 || path.startsWith("/api/auth/signup")
-                || (path.startsWith("/api/products") && HttpMethod.GET.equals(method));
+                || (path.startsWith("/api/products") && !path.startsWith("/api/products/wishlist") && HttpMethod.GET.equals(method));
     }
 
     private boolean requiresAdmin(String path, HttpMethod method) {
@@ -93,6 +93,10 @@ public class JwtAccessControlFilter implements GlobalFilter, Ordered {
             return true;
         }
         if (path.startsWith("/api/products") && !HttpMethod.GET.equals(method)) {
+            // Wishlist is available to all authenticated users
+            if (path.startsWith("/api/products/wishlist")) {
+                return false;
+            }
             return true;
         }
         if (path.equals("/api/orders") && HttpMethod.GET.equals(method)) {
