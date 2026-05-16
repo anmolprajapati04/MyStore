@@ -16,18 +16,23 @@ services:
     name: discovery-service
     runtime: docker
     dockerContext: .
-    dockerfile: Dockerfile.discovery
+    dockerfile: Dockerfile
     plan: free
     healthCheckPath: /
+    envVars:
+      - key: SERVICE_NAME
+        value: discovery-service
 
   # 2. Auth Service
   - type: web
     name: auth-service
     runtime: docker
     dockerContext: .
-    dockerfile: auth-service/Dockerfile
+    dockerfile: Dockerfile
     plan: free
     envVars:
+      - key: SERVICE_NAME
+        value: auth-service
       - key: SPRING_DATASOURCE_URL
         value: jdbc:mysql://mystore-db:3306/ecommerce_auth?createDatabaseIfNotExist=true
       - key: SPRING_DATASOURCE_PASSWORD
@@ -43,9 +48,11 @@ services:
     name: product-service
     runtime: docker
     dockerContext: .
-    dockerfile: product-service/Dockerfile
+    dockerfile: Dockerfile
     plan: free
     envVars:
+      - key: SERVICE_NAME
+        value: product-service
       - key: SPRING_DATASOURCE_URL
         value: jdbc:mysql://mystore-db:3306/ecommerce_product?createDatabaseIfNotExist=true
       - key: SPRING_DATASOURCE_PASSWORD
@@ -60,9 +67,11 @@ services:
     name: order-service
     runtime: docker
     dockerContext: .
-    dockerfile: order-service/Dockerfile
+    dockerfile: Dockerfile
     plan: free
     envVars:
+      - key: SERVICE_NAME
+        value: order-service
       - key: SPRING_DATASOURCE_URL
         value: jdbc:mysql://mystore-db:3306/ecommerce_order?createDatabaseIfNotExist=true
       - key: SPRING_DATASOURCE_PASSWORD
@@ -89,19 +98,20 @@ services:
     name: gateway-service
     runtime: docker
     dockerContext: .
-    dockerfile: gateway-service/Dockerfile
+    dockerfile: Dockerfile
     plan: free
     envVars:
+      - key: SERVICE_NAME
+        value: gateway-service
       - key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
         value: http://discovery-service:8761/eureka/
       - fromGroup: shared-secrets
 
-  # 6. Frontend
+  # 6. Frontend (Using its own Dockerfile in its folder)
   - type: web
     name: mystore-frontend
     runtime: docker
-    dockerContext: .
-    dockerfile: frontend/Dockerfile
+    dockerContext: ./frontend
     plan: free
     envVars:
       - key: VITE_API_GATEWAY_URL
