@@ -1,23 +1,22 @@
-services:
-  # 1. Database (MySQL)
-  - type: database
-    name: mystore-db
+databases:
+  - name: mystore-db
     databaseName: ecommerce
     user: root
-    plan: free # Change to 'starter' for persistence
+    plan: free
 
-  # 2. Discovery Service
+services:
+  # 1. Discovery Service
   - type: web
     name: discovery-service
-    env: docker
+    runtime: docker
     dockerContext: ./discovery-service
     plan: free
     healthCheckPath: /
 
-  # 3. Auth Service
+  # 2. Auth Service
   - type: web
     name: auth-service
-    env: docker
+    runtime: docker
     dockerContext: ./auth-service
     plan: free
     envVars:
@@ -32,10 +31,10 @@ services:
       - key: JWT_SECRET
         generateValue: true
 
-  # 4. Product Service
+  # 3. Product Service
   - type: web
     name: product-service
-    env: docker
+    runtime: docker
     dockerContext: ./product-service
     plan: free
     envVars:
@@ -48,10 +47,10 @@ services:
       - key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
         value: http://discovery-service:8761/eureka/
 
-  # 5. Order Service
+  # 4. Order Service
   - type: web
     name: order-service
-    env: docker
+    runtime: docker
     dockerContext: ./order-service
     plan: free
     envVars:
@@ -76,10 +75,10 @@ services:
       - key: RAZORPAY_KEY_SECRET
         sync: false
 
-  # 6. Gateway Service
+  # 5. Gateway Service
   - type: web
     name: gateway-service
-    env: docker
+    runtime: docker
     dockerContext: ./gateway-service
     plan: free
     envVars:
@@ -92,10 +91,10 @@ services:
           property: envVar
           envVarKey: JWT_SECRET
 
-  # 7. Frontend
+  # 6. Frontend
   - type: web
     name: mystore-frontend
-    env: docker
+    runtime: docker
     dockerContext: ./frontend
     plan: free
     envVars:
