@@ -4,6 +4,12 @@ databases:
     user: root
     plan: free
 
+envVarGroups:
+  - name: shared-secrets
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+
 services:
   # 1. Discovery Service
   - type: web
@@ -28,8 +34,8 @@ services:
           property: password
       - key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
         value: http://discovery-service:8761/eureka/
-      - key: JWT_SECRET
-        generateValue: true
+    envVarGroups:
+      - name: shared-secrets
 
   # 3. Product Service
   - type: web
@@ -84,12 +90,8 @@ services:
     envVars:
       - key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
         value: http://discovery-service:8761/eureka/
-      - key: JWT_SECRET
-        fromService:
-          name: auth-service
-          type: web
-          property: envVar
-          envVarKey: JWT_SECRET
+    envVarGroups:
+      - name: shared-secrets
 
   # 6. Frontend
   - type: web
