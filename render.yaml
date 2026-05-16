@@ -1,0 +1,106 @@
+services:
+  # 1. Database (MySQL)
+  - type: database
+    name: mystore-db
+    databaseName: ecommerce
+    user: root
+    plan: free # Change to 'starter' for persistence
+
+  # 2. Discovery Service
+  - type: web
+    name: discovery-service
+    env: docker
+    dockerContext: ./discovery-service
+    plan: free
+    healthCheckPath: /
+
+  # 3. Auth Service
+  - type: web
+    name: auth-service
+    env: docker
+    dockerContext: ./auth-service
+    plan: free
+    envVars:
+      - key: SPRING_DATASOURCE_URL
+        value: jdbc:mysql://mystore-db:3306/ecommerce_auth?createDatabaseIfNotExist=true
+      - key: SPRING_DATASOURCE_PASSWORD
+        fromDatabase:
+          name: mystore-db
+          property: password
+      - key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+        value: http://discovery-service:8761/eureka/
+      - key: JWT_SECRET
+        generateValue: true
+
+  # 4. Product Service
+  - type: web
+    name: product-service
+    env: docker
+    dockerContext: ./product-service
+    plan: free
+    envVars:
+      - key: SPRING_DATASOURCE_URL
+        value: jdbc:mysql://mystore-db:3306/ecommerce_product?createDatabaseIfNotExist=true
+      - key: SPRING_DATASOURCE_PASSWORD
+        fromDatabase:
+          name: mystore-db
+          property: password
+      - key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+        value: http://discovery-service:8761/eureka/
+
+  # 5. Order Service
+  - type: web
+    name: order-service
+    env: docker
+    dockerContext: ./order-service
+    plan: free
+    envVars:
+      - key: SPRING_DATASOURCE_URL
+        value: jdbc:mysql://mystore-db:3306/ecommerce_order?createDatabaseIfNotExist=true
+      - key: SPRING_DATASOURCE_PASSWORD
+        fromDatabase:
+          name: mystore-db
+          property: password
+      - key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+        value: http://discovery-service:8761/eureka/
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+
+  # 6. Gateway Service
+  - type: web
+    name: gateway-service
+    env: docker
+    dockerContext: ./gateway-service
+    plan: free
+    envVars:
+      - key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+        value: http://discovery-service:8761/eureka/
+      - key: JWT_SECRET
+        fromService:
+          name: auth-service
+          type: web
+          property: envVar
+          envVarKey: JWT_SECRET
+
+  # 7. Frontend
+  - type: web
+    name: mystore-frontend
+    env: docker
+    dockerContext: ./frontend
+    plan: free
+    envVars:
+      - key: VITE_API_GATEWAY_URL
+        fromService:
+          name: gateway-service
+          type: web
+          property: host
