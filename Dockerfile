@@ -14,5 +14,9 @@ RUN mvn clean package -DskipTests
 # Run stage
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
+# Correctly pick the executable JAR (ignoring .original files)
 COPY --from=build /app/target/*.jar app.jar
-ENTRYPOINT ["java", "-Xmx384m", "-Xms256m", "-Dserver.port=${PORT}", "-jar", "app.jar"]
+RUN mv app.jar service.jar && \
+    ( [ -f service.jar.original ] && rm service.jar.original || true )
+
+ENTRYPOINT ["java", "-Xmx384m", "-Xms256m", "-Dserver.port=${PORT}", "-jar", "service.jar"]
