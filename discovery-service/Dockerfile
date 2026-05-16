@@ -10,5 +10,4 @@ RUN mvn clean package -DskipTests
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
-# Optimized for 512MB memory limit
-ENTRYPOINT ["java", "-Xmx384m", "-Xms256m", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-Xmx384m", "-Xms256m", "-Dserver.port=${PORT:-8761}", "-jar", "app.jar"]

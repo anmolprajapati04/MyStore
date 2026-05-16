@@ -10,4 +10,5 @@ RUN mvn clean package -DskipTests
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
-ENTRYPOINT ["java", "-Xmx384m", "-Xms256m", "-jar", "app.jar"]
+# Use $PORT environment variable assigned by Render
+ENTRYPOINT ["java", "-Xmx384m", "-Xms256m", "-Dserver.port=${PORT:-8081}", "-jar", "app.jar"]
