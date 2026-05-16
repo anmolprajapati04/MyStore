@@ -15,7 +15,8 @@ services:
   - type: web
     name: discovery-service
     runtime: docker
-    dockerContext: ./discovery-service
+    dockerContext: .
+    dockerFilePath: discovery-service/Dockerfile
     plan: free
     healthCheckPath: /
 
@@ -23,7 +24,8 @@ services:
   - type: web
     name: auth-service
     runtime: docker
-    dockerContext: ./auth-service
+    dockerContext: .
+    dockerFilePath: auth-service/Dockerfile
     plan: free
     envVars:
       - key: SPRING_DATASOURCE_URL
@@ -40,7 +42,8 @@ services:
   - type: web
     name: product-service
     runtime: docker
-    dockerContext: ./product-service
+    dockerContext: .
+    dockerFilePath: product-service/Dockerfile
     plan: free
     envVars:
       - key: SPRING_DATASOURCE_URL
@@ -56,7 +59,8 @@ services:
   - type: web
     name: order-service
     runtime: docker
-    dockerContext: ./order-service
+    dockerContext: .
+    dockerFilePath: order-service/Dockerfile
     plan: free
     envVars:
       - key: SPRING_DATASOURCE_URL
@@ -84,7 +88,8 @@ services:
   - type: web
     name: gateway-service
     runtime: docker
-    dockerContext: ./gateway-service
+    dockerContext: .
+    dockerFilePath: gateway-service/Dockerfile
     plan: free
     envVars:
       - key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
@@ -95,7 +100,8 @@ services:
   - type: web
     name: mystore-frontend
     runtime: docker
-    dockerContext: ./frontend
+    dockerContext: .
+    dockerFilePath: frontend/Dockerfile
     plan: free
     envVars:
       - key: VITE_API_GATEWAY_URL
