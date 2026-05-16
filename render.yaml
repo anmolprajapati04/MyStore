@@ -16,7 +16,7 @@ services:
     name: discovery-service
     runtime: docker
     dockerContext: .
-    dockerfile: discovery-service/Dockerfile
+    dockerfile: Dockerfile.discovery
     plan: free
     healthCheckPath: /
 
