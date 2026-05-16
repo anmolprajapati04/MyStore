@@ -34,8 +34,7 @@ services:
           property: password
       - key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
         value: http://discovery-service:8761/eureka/
-    envVarGroups:
-      - name: shared-secrets
+      - fromGroup: shared-secrets
 
   # 3. Product Service
   - type: web
@@ -90,8 +89,7 @@ services:
     envVars:
       - key: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
         value: http://discovery-service:8761/eureka/
-    envVarGroups:
-      - name: shared-secrets
+      - fromGroup: shared-secrets
 
   # 6. Frontend
   - type: web
